@@ -8,7 +8,8 @@ import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Stat } from '@/components/ui/stat';
 import { Spacing } from '@/constants/theme';
-import { expiringSoon, lowStockCount } from '@/features/kitchen/mock-data';
+import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
+import { useKitchenStore } from '@/features/kitchen/store';
 import { billsDue, yourBalance } from '@/features/money/mock-data';
 import { choresLeftThisWeek, nextChore } from '@/features/tasks/mock-data';
 import { formatCurrency } from '@/lib/format';
@@ -18,6 +19,10 @@ import { formatCurrency } from '@/lib/format';
 const homeHeaderTitle = 'HouseholdOS';
 
 export function HomeScreen() {
+  const items = useKitchenStore((state) => state.items);
+  const expiringSoonCount = getExpiringSoonItems(items).length;
+  const lowStockCount = getLowStockItems(items).length;
+
   return (
     <Screen>
       <View style={styles.header}>
@@ -28,7 +33,7 @@ export function HomeScreen() {
 
       <Section title="Kitchen" action={{ label: 'View Kitchen', href: '/kitchen' }}>
         <Card style={styles.statRow}>
-          <Stat label="Expiring soon" value={String(expiringSoon.length)} tone="warning" />
+          <Stat label="Expiring soon" value={String(expiringSoonCount)} tone="warning" />
           <Stat label="Low stock" value={String(lowStockCount)} tone="muted" />
         </Card>
       </Section>

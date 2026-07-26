@@ -5,14 +5,19 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 
+type SectionAction = { label: string } & (
+  { href: Href; onPress?: never } | { href?: never; onPress: () => void }
+);
+
 type SectionProps = PropsWithChildren<{
   title?: string;
-  action?: { label: string; href: Href };
+  action?: SectionAction;
 }>;
 
 /**
- * A titled vertical block with an optional "view all" style action link.
- * Used to group related content (e.g. the Kitchen summary on Home).
+ * A titled vertical block with an optional "view all" style action. The
+ * action either navigates (`href`) or runs a callback (`onPress`, e.g. to
+ * open a bottom sheet) — never both.
  */
 export function Section({ title, action, children }: SectionProps) {
   return (
@@ -26,13 +31,17 @@ export function Section({ title, action, children }: SectionProps) {
           ) : (
             <View />
           )}
-          {action && (
+          {action && 'href' in action && action.href ? (
             <Link href={action.href} asChild>
               <Pressable hitSlop={8}>
                 <ThemedText type="linkPrimary">{action.label}</ThemedText>
               </Pressable>
             </Link>
-          )}
+          ) : action ? (
+            <Pressable hitSlop={8} onPress={action.onPress}>
+              <ThemedText type="linkPrimary">{action.label}</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
       )}
       <View style={styles.body}>{children}</View>

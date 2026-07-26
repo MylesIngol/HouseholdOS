@@ -1,22 +1,160 @@
-import type { ExpiringItem, GroceryItem, KitchenSectionSummary } from './types';
+import { addDaysIso } from './expiration';
+import type { GroceryListEntry, HouseholdMember, InventoryItem } from './types';
 
-// Local mock data only — no backend yet. Replace with Supabase-backed queries
-// once the kitchen feature gets its own api.ts/hooks.ts (see features/_example
-// convention, since removed in favor of these real feature folders).
+// Local mock data only — no backend yet. Dates are generated relative to
+// "now" (rather than hardcoded) so the expiring-soon/low-stock demo data
+// stays meaningful no matter when this runs.
 
-export const kitchenSections: KitchenSectionSummary[] = [
-  { key: 'pantry', label: 'Pantry', itemCount: 24 },
-  { key: 'fridge', label: 'Fridge', itemCount: 15 },
-  { key: 'freezer', label: 'Freezer', itemCount: 9 },
+const now = new Date().toISOString();
+
+export const householdMembers: HouseholdMember[] = [
+  { id: 'you', name: 'You' },
+  { id: 'sam', name: 'Sam' },
 ];
 
-export const expiringSoon: ExpiringItem[] = [
-  { id: '1', name: 'Greek yogurt', location: 'Fridge', daysLeft: 1 },
-  { id: '2', name: 'Spinach', location: 'Fridge', daysLeft: 2 },
-  { id: '3', name: 'Sourdough bread', location: 'Pantry', daysLeft: 3 },
+export const inventoryItems: InventoryItem[] = [
+  {
+    id: '1',
+    name: 'Milk',
+    category: 'dairy',
+    location: 'fridge',
+    status: 'low',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '2',
+    name: 'Eggs',
+    category: 'dairy',
+    location: 'fridge',
+    status: 'in_stock',
+    quantity: 8,
+    unit: 'count',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '3',
+    name: 'Chicken Breast',
+    category: 'meat',
+    location: 'fridge',
+    status: 'in_stock',
+    expiration: { date: addDaysIso(1), confidence: 'exact' },
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '4',
+    name: 'Greek Yogurt',
+    category: 'dairy',
+    location: 'fridge',
+    status: 'in_stock',
+    quantity: 4,
+    unit: 'pack',
+    expiration: { date: addDaysIso(3), confidence: 'estimated' },
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '5',
+    name: 'Butter',
+    category: 'dairy',
+    location: 'fridge',
+    status: 'out',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '6',
+    name: 'Protein Shake',
+    category: 'beverages',
+    location: 'fridge',
+    status: 'in_stock',
+    quantity: 6,
+    unit: 'count',
+    ownership: 'personal',
+    ownerId: 'sam',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '7',
+    name: 'Frozen Peas',
+    category: 'frozen',
+    location: 'freezer',
+    status: 'in_stock',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '8',
+    name: 'Ice Cream',
+    category: 'frozen',
+    location: 'freezer',
+    status: 'low',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '9',
+    name: 'Rice',
+    category: 'grains',
+    location: 'pantry',
+    status: 'in_stock',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '10',
+    name: 'Ketchup',
+    category: 'condiments',
+    location: 'pantry',
+    status: 'low',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '11',
+    name: 'Cereal',
+    category: 'grains',
+    location: 'pantry',
+    status: 'in_stock',
+    expiration: { date: addDaysIso(2), confidence: 'estimated' },
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '12',
+    name: 'Canned Beans',
+    category: 'canned',
+    location: 'pantry',
+    status: 'in_stock',
+    quantity: 6,
+    unit: 'count',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
+  {
+    id: '13',
+    name: 'Olive Oil',
+    category: 'condiments',
+    location: 'pantry',
+    status: 'out',
+    ownership: 'shared',
+    addedAt: now,
+    updatedAt: now,
+  },
 ];
 
-// Surfaced on Home; not broken out as its own Kitchen section in this milestone.
-export const lowStockCount = 7;
-
-export const groceryList: GroceryItem[] = [];
+export const groceryListEntries: GroceryListEntry[] = [];
