@@ -53,6 +53,31 @@ export function getLocationLabel(location: InventoryItem['location']): string {
   }
 }
 
+export function getCategoryLabel(category: InventoryItem['category']): string {
+  switch (category) {
+    case 'produce':
+      return 'Produce';
+    case 'dairy':
+      return 'Dairy';
+    case 'meat':
+      return 'Meat';
+    case 'grains':
+      return 'Grains';
+    case 'canned':
+      return 'Canned';
+    case 'condiments':
+      return 'Condiments';
+    case 'beverages':
+      return 'Beverages';
+    case 'snacks':
+      return 'Snacks';
+    case 'frozen':
+      return 'Frozen';
+    case 'other':
+      return 'Other';
+  }
+}
+
 export function getStatusLabel(status: InventoryItem['status']): string {
   switch (status) {
     case 'in_stock':
