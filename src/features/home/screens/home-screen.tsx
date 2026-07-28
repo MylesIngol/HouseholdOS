@@ -10,9 +10,10 @@ import { Stat } from '@/components/ui/stat';
 import { Spacing } from '@/constants/theme';
 import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
 import { useKitchenStore } from '@/features/kitchen/store';
-import { billsDue, yourBalance } from '@/features/money/mock-data';
+import { getMoneySummary, getUpcomingBills } from '@/features/money/balances';
+import { formatCentsAsCurrency } from '@/features/money/display';
+import { useMoneyStore } from '@/features/money/store';
 import { choresLeftThisWeek, nextChore } from '@/features/tasks/mock-data';
-import { formatCurrency } from '@/lib/format';
 
 // Placeholder for the household's display name until household naming/settings
 // exists — swap this for the real household name when that's available.
@@ -22,6 +23,16 @@ export function HomeScreen() {
   const items = useKitchenStore((state) => state.items);
   const expiringSoonCount = getExpiringSoonItems(items).length;
   const lowStockCount = getLowStockItems(items).length;
+
+  const moneyMembers = useMoneyStore((state) => state.members);
+  const expenses = useMoneyStore((state) => state.expenses);
+  const settlements = useMoneyStore((state) => state.settlements);
+  const bills = useMoneyStore((state) => state.bills);
+  const currentUser = moneyMembers.find((member) => member.isCurrentUser);
+  const moneySummary = currentUser
+    ? getMoneySummary(currentUser.id, moneyMembers, expenses, settlements)
+    : { youOweCents: 0, youAreOwedCents: 0 };
+  const upcomingBillsCount = getUpcomingBills(bills).length;
 
   return (
     <Screen>
@@ -40,10 +51,23 @@ export function HomeScreen() {
 
       <Section title="Money" action={{ label: 'View Money', href: '/money' }}>
         <Card>
-          <Stat label="Owed to you" value={formatCurrency(yourBalance)} tone="success" />
-          <ThemedText type="small" themeColor="textSecondary">
-            {billsDue.length} bills due soon
-          </ThemedText>
+          <View style={styles.statRow}>
+            <Stat
+              label="You owe"
+              value={formatCentsAsCurrency(moneySummary.youOweCents)}
+              tone={moneySummary.youOweCents > 0 ? 'danger' : 'muted'}
+            />
+            <Stat
+              label="You're owed"
+              value={formatCentsAsCurrency(moneySummary.youAreOwedCents)}
+              tone={moneySummary.youAreOwedCents > 0 ? 'success' : 'muted'}
+            />
+          </View>
+          {upcomingBillsCount > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {upcomingBillsCount} {upcomingBillsCount === 1 ? 'bill' : 'bills'} due soon
+            </ThemedText>
+          )}
         </Card>
       </Section>
 

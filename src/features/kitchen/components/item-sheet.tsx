@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { PillSelector } from '@/components/ui/pill-selector';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radii, Spacing } from '@/constants/theme';
-import { PillSelector } from '@/features/kitchen/components/pill-selector';
 import { addDaysIso, formatExpirationLabel } from '@/features/kitchen/expiration';
 import { householdMembers } from '@/features/kitchen/mock-data';
 import { useKitchenStore } from '@/features/kitchen/store';
@@ -58,6 +58,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const updateItem = useKitchenStore((state) => state.updateItem);
   const setItemStatus = useKitchenStore((state) => state.setStatus);
   const addToGrocery = useKitchenStore((state) => state.addInventoryItemToGrocery);
+  const deleteItem = useKitchenStore((state) => state.deleteItem);
 
   const isEditMode = !!item;
 
@@ -74,6 +75,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const [ownerId, setOwnerId] = useState<string | undefined>(undefined);
   const [notes, setNotes] = useState('');
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -88,6 +90,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
     setOwnerId(item?.ownerId);
     setNotes(item?.notes ?? '');
     setDetailsExpanded(false);
+    setDeleteConfirmOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, item?.id]);
 
@@ -133,6 +136,12 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   function handleAddToGrocery() {
     if (!item) return;
     addToGrocery(item.id);
+    onClose();
+  }
+
+  function handleDelete() {
+    if (!item) return;
+    deleteItem(item.id);
     onClose();
   }
 
@@ -336,6 +345,34 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
         </Pressable>
       )}
 
+      {isEditMode &&
+        (!deleteConfirmOpen ? (
+          <Pressable onPress={() => setDeleteConfirmOpen(true)} hitSlop={8}>
+            <ThemedText type="linkPrimary" style={{ color: theme.danger }}>
+              Delete Item
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <View style={styles.field}>
+            <ThemedText type="small" themeColor="textSecondary">
+              Delete this item permanently? This can&apos;t be undone — Mark Out is the reversible
+              option if you just want to note it&apos;s gone for now.
+            </ThemedText>
+            <View style={styles.confirmActions}>
+              <Pressable onPress={() => setDeleteConfirmOpen(false)} hitSlop={8}>
+                <ThemedText type="small" themeColor="muted">
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable onPress={handleDelete} hitSlop={8}>
+                <ThemedText type="linkPrimary" style={{ color: theme.danger }}>
+                  Delete
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+
       <PrimaryButton
         label={isEditMode ? 'Save' : 'Add Item'}
         onPress={canSave ? handleSave : undefined}
@@ -396,6 +433,10 @@ const styles = StyleSheet.create({
   },
   customDateApplyDisabled: {
     opacity: 0.4,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: Spacing.four,
   },
   disabled: {
     opacity: 0.5,

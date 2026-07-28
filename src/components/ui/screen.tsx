@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
@@ -27,13 +27,26 @@ export function Screen({ children, scroll = true }: ScreenProps) {
   return (
     <ThemedView style={styles.flexFill}>
       {scroll ? (
-        <ScrollView
+        // KeyboardAvoidingView is what keeps a focused input (e.g. the
+        // Kitchen grocery quick-add field) above the keyboard instead of
+        // hidden behind it — no hardcoded offset, it just reserves however
+        // much space the keyboard actually needs, and un-reserves it when
+        // the keyboard closes. keyboardShouldPersistTaps lets a nearby
+        // "Add"/link Pressable still register its tap on the first press
+        // instead of only dismissing the keyboard.
+        <KeyboardAvoidingView
           style={styles.flexFill}
-          contentContainerStyle={styles.centerRow}
-          showsVerticalScrollIndicator={false}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          {inner}
-        </ScrollView>
+          <ScrollView
+            style={styles.flexFill}
+            contentContainerStyle={styles.centerRow}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {inner}
+          </ScrollView>
+        </KeyboardAvoidingView>
       ) : (
         <View style={styles.centerRowFlex}>{inner}</View>
       )}

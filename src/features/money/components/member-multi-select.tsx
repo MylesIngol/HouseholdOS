@@ -2,31 +2,39 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing } from '@/constants/theme';
+import type { HouseholdMember } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
-type PillSelectorOption<T extends string> = {
-  value: T;
-  label: string;
+type MemberMultiSelectProps = {
+  members: HouseholdMember[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
 };
 
-type PillSelectorProps<T extends string> = {
-  options: PillSelectorOption<T>[];
-  value: T | undefined;
-  onChange: (value: T) => void;
-};
-
-/** A row of tappable pills used for single-choice fields: location, status, ownership, filters. */
-export function PillSelector<T extends string>({ options, value, onChange }: PillSelectorProps<T>) {
+/**
+ * Toggleable member pills for participant selection — distinct from the
+ * shared single-select `PillSelector` since choosing expense/bill
+ * participants means picking any number of people, not exactly one.
+ */
+export function MemberMultiSelect({ members, selectedIds, onChange }: MemberMultiSelectProps) {
   const theme = useTheme();
+
+  function toggle(memberId: string) {
+    if (selectedIds.includes(memberId)) {
+      onChange(selectedIds.filter((id) => id !== memberId));
+    } else {
+      onChange([...selectedIds, memberId]);
+    }
+  }
 
   return (
     <View style={styles.row}>
-      {options.map((option) => {
-        const selected = option.value === value;
+      {members.map((member) => {
+        const selected = selectedIds.includes(member.id);
         return (
           <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
+            key={member.id}
+            onPress={() => toggle(member.id)}
             style={[
               styles.pill,
               { backgroundColor: selected ? theme.accent : theme.backgroundElement },
@@ -36,7 +44,7 @@ export function PillSelector<T extends string>({ options, value, onChange }: Pil
               type="smallBold"
               style={{ color: selected ? theme.onAccent : theme.textSecondary }}
             >
-              {option.label}
+              {member.isCurrentUser ? 'You' : member.name}
             </ThemedText>
           </Pressable>
         );

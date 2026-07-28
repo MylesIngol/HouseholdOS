@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { PillSelector } from '@/components/ui/pill-selector';
 import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Radii, Spacing } from '@/constants/theme';
@@ -13,7 +14,6 @@ import { GroceryRow } from '@/features/kitchen/components/grocery-row';
 import { InventoryRow } from '@/features/kitchen/components/inventory-row';
 import { ItemSheet } from '@/features/kitchen/components/item-sheet';
 import { OutItemsSheet } from '@/features/kitchen/components/out-items-sheet';
-import { PillSelector } from '@/features/kitchen/components/pill-selector';
 import {
   filterBySearch,
   getActiveItems,

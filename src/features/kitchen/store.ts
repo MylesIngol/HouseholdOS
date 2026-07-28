@@ -28,9 +28,12 @@ type KitchenState = {
     patch: Partial<Omit<InventoryItem, 'id' | 'addedAt' | 'updatedAt'>>,
   ) => void;
   setStatus: (id: string, status: InventoryStatus) => void;
+  /** Permanent removal — distinct from Mark Out, which keeps the record for easy re-purchase. Un-links (doesn't delete) any grocery entry that pointed at this item. */
+  deleteItem: (id: string) => void;
 
   addGroceryItem: (name: string) => void;
   addInventoryItemToGrocery: (inventoryItemId: string) => void;
+  updateGroceryItem: (id: string, name: string) => void;
   removeGroceryItem: (id: string) => void;
   /** For unlinked entries, `location` is required — the UI collects it via a quick picker before calling this. */
   purchaseGroceryItem: (groceryItemId: string, location?: StorageLocation) => void;
@@ -77,6 +80,17 @@ export const useKitchenStore = create<KitchenState>((set, get) => ({
     get().updateItem(id, { status });
   },
 
+  deleteItem: (id) => {
+    set((state) => ({
+      items: state.items.filter((item) => item.id !== id),
+      // A grocery entry that pointed at this item becomes a plain manual
+      // entry instead of disappearing — the user may still want to buy it.
+      groceryItems: state.groceryItems.map((entry) =>
+        entry.inventoryItemId === id ? { ...entry, inventoryItemId: undefined } : entry,
+      ),
+    }));
+  },
+
   addGroceryItem: (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -112,6 +126,16 @@ export const useKitchenStore = create<KitchenState>((set, get) => ({
       inventoryItemId: item.id,
     };
     set((state) => ({ groceryItems: [entry, ...state.groceryItems] }));
+  },
+
+  updateGroceryItem: (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    set((state) => ({
+      groceryItems: state.groceryItems.map((entry) =>
+        entry.id === id ? { ...entry, name: trimmed } : entry,
+      ),
+    }));
   },
 
   removeGroceryItem: (id) => {

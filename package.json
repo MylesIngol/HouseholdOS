@@ -44,7 +44,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:money": "node --experimental-strip-types --test src/features/money/*.test.ts"
   },
   "private": true
 }

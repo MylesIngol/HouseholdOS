@@ -2,6 +2,12 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // Lets the Money pure-calculation test files (*.test.ts) import their
+    // subjects with an explicit .ts extension, which is what lets them run
+    // directly via `node --experimental-strip-types --test` with no bundler
+    // and no test framework dependency. Safe here because noEmit is already
+    // true (set by expo/tsconfig.base) — this only affects type-checking.
+    "allowImportingTsExtensions": true,
     "paths": {
       "@/*": [
         "./src/*"
