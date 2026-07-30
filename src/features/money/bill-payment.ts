@@ -59,14 +59,27 @@ export function applyMarkBillPaid(
   return { bills: updatedBills, expenses: [expense, ...expenses] };
 }
 
-/** Next month, same day-of-month as the template — based on the latest known occurrence if one exists, otherwise today. */
+/**
+ * Next month, same day-of-month as the template — based on the latest known
+ * occurrence if one exists, otherwise today. Clamped to the target month's
+ * last valid day rather than letting `Date` overflow into the month after:
+ * `new Date(year, month, 31)` for a 28/29/30-day month silently rolls into
+ * the *next* month (e.g. Jan 31 -> naive "Feb 31" becomes Mar 3), which is
+ * wrong for a bill due date. `dayOfMonth` is capped at 28 at creation time
+ * (see `RecurringBillTemplate`) so this rarely bites today, but the clamp
+ * makes the function correct regardless of that upstream constraint.
+ */
 export function computeNextOccurrenceDueDate(
   latestDueDate: string | undefined,
   dayOfMonth: number,
   referenceDate: Date = new Date(),
 ): string {
   const base = latestDueDate ? new Date(`${latestDueDate}T00:00:00`) : referenceDate;
-  return new Date(base.getFullYear(), base.getMonth() + 1, dayOfMonth).toISOString().slice(0, 10);
+  const targetYear = base.getFullYear();
+  const targetMonth = base.getMonth() + 1;
+  const daysInTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const clampedDay = Math.min(dayOfMonth, daysInTargetMonth);
+  return new Date(targetYear, targetMonth, clampedDay).toISOString().slice(0, 10);
 }
 
 export function buildNextOccurrence(

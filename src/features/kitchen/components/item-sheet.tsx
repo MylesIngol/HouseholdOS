@@ -2,12 +2,10 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
-import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radii, Spacing } from '@/constants/theme';
 import { addDaysIso, formatExpirationLabel } from '@/features/kitchen/expiration';
-import { householdMembers } from '@/features/kitchen/mock-data';
 import { useKitchenStore } from '@/features/kitchen/store';
 import type {
   ExpirationInfo,
@@ -16,6 +14,7 @@ import type {
   Ownership,
   StorageLocation,
 } from '@/features/kitchen/types';
+import { useHouseholdStore } from '@/features/household/store';
 import { useTheme } from '@/hooks/use-theme';
 
 type ItemSheetProps = {
@@ -59,6 +58,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const setItemStatus = useKitchenStore((state) => state.setStatus);
   const addToGrocery = useKitchenStore((state) => state.addInventoryItemToGrocery);
   const deleteItem = useKitchenStore((state) => state.deleteItem);
+  const householdMembers = useHouseholdStore((state) => state.members);
 
   const isEditMode = !!item;
 
@@ -181,11 +181,14 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const showDetails = isEditMode || detailsExpanded;
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <ThemedText type="label" themeColor="muted">
-        {isEditMode ? 'Edit Item' : 'Add Item'}
-      </ThemedText>
-
+    <FullScreenForm
+      visible={visible}
+      onClose={onClose}
+      title={isEditMode ? 'Edit Item' : 'Add Item'}
+      onSave={canSave ? handleSave : undefined}
+      saveLabel={isEditMode ? 'Save' : 'Add'}
+      saveDisabled={!canSave}
+    >
       <View style={styles.field}>
         <TextInput
           value={name}
@@ -372,13 +375,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
             </View>
           </View>
         ))}
-
-      <PrimaryButton
-        label={isEditMode ? 'Save' : 'Add Item'}
-        onPress={canSave ? handleSave : undefined}
-        style={canSave ? undefined : styles.disabled}
-      />
-    </BottomSheet>
+    </FullScreenForm>
   );
 }
 
@@ -437,8 +434,5 @@ const styles = StyleSheet.create({
   confirmActions: {
     flexDirection: 'row',
     gap: Spacing.four,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 });

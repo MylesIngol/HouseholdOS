@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
-import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radii, Spacing } from '@/constants/theme';
+import { useHouseholdStore } from '@/features/household/store';
 import { isSplitReadyToSave, SplitEditor } from '@/features/money/components/split-editor';
 import { getCategoryLabel, getDeleteExpenseWarning } from '@/features/money/display';
 import { centsToDollarsInput, dollarsToCents, resolveShares } from '@/features/money/money-math';
@@ -31,7 +31,7 @@ function todayIso(): string {
 /** Fast "add expense" flow: description + amount is the minimum, everything else defaults to the common case and stays editable. Also doubles as the edit sheet when `expense` is provided. */
 export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
   const theme = useTheme();
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const bills = useMoneyStore((state) => state.bills);
   const addExpense = useMoneyStore((state) => state.addExpense);
   const updateExpense = useMoneyStore((state) => state.updateExpense);
@@ -120,11 +120,14 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <ThemedText type="label" themeColor="muted">
-        {isEditMode ? 'Edit Expense' : 'Add Expense'}
-      </ThemedText>
-
+    <FullScreenForm
+      visible={visible}
+      onClose={onClose}
+      title={isEditMode ? 'Edit Expense' : 'Add Expense'}
+      onSave={canSave ? handleSave : undefined}
+      saveLabel={isEditMode ? 'Save' : 'Add'}
+      saveDisabled={!canSave}
+    >
       <View style={styles.field}>
         <TextInput
           value={description}
@@ -251,13 +254,7 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
             </View>
           </View>
         ))}
-
-      <PrimaryButton
-        label={isEditMode ? 'Save' : 'Add Expense'}
-        onPress={canSave ? handleSave : undefined}
-        style={canSave ? undefined : styles.disabled}
-      />
-    </BottomSheet>
+    </FullScreenForm>
   );
 }
 
@@ -281,8 +278,5 @@ const styles = StyleSheet.create({
   confirmActions: {
     flexDirection: 'row',
     gap: Spacing.four,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 });

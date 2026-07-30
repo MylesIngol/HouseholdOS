@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
-import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radii, Spacing } from '@/constants/theme';
+import { useHouseholdStore } from '@/features/household/store';
 import { isSplitReadyToSave, SplitEditor } from '@/features/money/components/split-editor';
 import { getRecurrenceLabel } from '@/features/money/display';
 import { centsToDollarsInput, dollarsToCents, resolveShares } from '@/features/money/money-math';
@@ -34,7 +34,7 @@ function todayIso(): string {
 /** Fast "add bill" flow: name, amount, and due date are the minimum. Also the edit sheet for an upcoming bill when `bill` is provided. */
 export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
   const theme = useTheme();
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const addBill = useMoneyStore((state) => state.addBill);
   const updateBill = useMoneyStore((state) => state.updateBill);
   const deleteBill = useMoneyStore((state) => state.deleteBill);
@@ -131,11 +131,14 @@ export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
   }
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <ThemedText type="label" themeColor="muted">
-        {isEditMode ? 'Edit Bill' : 'Add Bill'}
-      </ThemedText>
-
+    <FullScreenForm
+      visible={visible}
+      onClose={onClose}
+      title={isEditMode ? 'Edit Bill' : 'Add Bill'}
+      onSave={canSave ? handleSave : undefined}
+      saveLabel={isEditMode ? 'Save' : 'Add'}
+      saveDisabled={!canSave}
+    >
       <View style={styles.field}>
         <TextInput
           value={name}
@@ -272,13 +275,7 @@ export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
             </View>
           </View>
         ))}
-
-      <PrimaryButton
-        label={isEditMode ? 'Save' : 'Add Bill'}
-        onPress={canSave ? handleSave : undefined}
-        style={canSave ? undefined : styles.disabled}
-      />
-    </BottomSheet>
+    </FullScreenForm>
   );
 }
 
@@ -302,8 +299,5 @@ const styles = StyleSheet.create({
   confirmActions: {
     flexDirection: 'row',
     gap: Spacing.four,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 });

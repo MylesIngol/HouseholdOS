@@ -5,7 +5,8 @@ import {
   getActivitySummary,
   type ActivityTone,
 } from '@/features/money/display';
-import type { ActivityEntry, HouseholdMember } from '@/features/money/types';
+import type { HouseholdMember } from '@/features/household/types';
+import type { ActivityEntry } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
 type ActivityRowProps = {

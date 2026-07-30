@@ -23,21 +23,17 @@ import { BillSheet } from '@/features/money/components/bill-sheet';
 import { ExpenseSheet } from '@/features/money/components/expense-sheet';
 import { RoommateDetailSheet } from '@/features/money/components/roommate-detail-sheet';
 import { SettlementDetailSheet } from '@/features/money/components/settlement-detail-sheet';
+import { useHouseholdStore } from '@/features/household/store';
+import type { HouseholdMember } from '@/features/household/types';
 import { formatCentsAsCurrency } from '@/features/money/display';
 import { useMoneyStore } from '@/features/money/store';
-import type {
-  ActivityEntry,
-  Bill,
-  Expense,
-  HouseholdMember,
-  Settlement,
-} from '@/features/money/types';
+import type { ActivityEntry, Bill, Expense, Settlement } from '@/features/money/types';
 
 type ExpenseSheetTarget = 'new' | Expense | null;
 type BillSheetTarget = 'new' | Bill | null;
 
 export function MoneyScreen() {
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const expenses = useMoneyStore((state) => state.expenses);
   const settlements = useMoneyStore((state) => state.settlements);
   const bills = useMoneyStore((state) => state.bills);

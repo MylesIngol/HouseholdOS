@@ -107,6 +107,19 @@ test('computeNextOccurrenceDueDate advances one month from the latest occurrence
   assert.equal(computeNextOccurrenceDueDate('2026-12-05', 5), '2027-01-05');
 });
 
+test('computeNextOccurrenceDueDate clamps to the target month’s last valid day instead of overflowing', () => {
+  // Jan 31 -> Feb has 28 days in 2027 (not a leap year)
+  assert.equal(computeNextOccurrenceDueDate('2027-01-31', 31), '2027-02-28');
+  // Jan 31 -> Feb has 29 days in 2028 (leap year)
+  assert.equal(computeNextOccurrenceDueDate('2028-01-31', 31), '2028-02-29');
+  // Mar 31 -> Apr has 30 days
+  assert.equal(computeNextOccurrenceDueDate('2026-03-31', 31), '2026-04-30');
+  // Without clamping, `new Date(year, month, 31)` for a 28-day Feb would
+  // silently roll into March — this asserts it does not.
+  const naiveOverflow = new Date(2027, 1, 31).toISOString().slice(0, 10);
+  assert.notEqual(computeNextOccurrenceDueDate('2027-01-31', 31), naiveOverflow);
+});
+
 test('buildNextOccurrence links back to the template and starts upcoming', () => {
   const template: RecurringBillTemplate = {
     id: 'recurring-1',

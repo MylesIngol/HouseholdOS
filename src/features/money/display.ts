@@ -1,10 +1,11 @@
+import type { HouseholdMember } from '@/features/household/types';
+
 import type {
   ActivityEntry,
   Bill,
   BillRecurrence,
   Expense,
   ExpenseCategory,
-  HouseholdMember,
   SplitMode,
 } from './types';
 
@@ -23,16 +24,8 @@ export function formatCentsAsCurrency(cents: number): string {
   return currencyFormatter.format(cents / 100);
 }
 
-export function getMemberInitials(member: HouseholdMember): string {
-  if (member.initials) return member.initials;
-  return member.name
-    .split(' ')
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-}
+// getMemberInitials moved to '@/features/household/display' (member identity
+// now lives entirely in the household feature).
 
 export function getCategoryLabel(category: ExpenseCategory): string {
   switch (category) {

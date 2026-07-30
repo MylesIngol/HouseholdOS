@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Spacing } from '@/constants/theme';
+import { useHouseholdStore } from '@/features/household/store';
 import { formatActivityDateLabel, formatCentsAsCurrency } from '@/features/money/display';
 import { useMoneyStore } from '@/features/money/store';
 import type { Settlement } from '@/features/money/types';
@@ -26,7 +27,7 @@ export function SettlementDetailSheet({
   settlement,
 }: SettlementDetailSheetProps) {
   const theme = useTheme();
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const deleteSettlement = useMoneyStore((state) => state.deleteSettlement);
   const currentUser = members.find((member) => member.isCurrentUser);
 

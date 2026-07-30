@@ -5,14 +5,12 @@ import { isValidSettlementAmount, splitEqualCents } from './money-math';
 import {
   bills as seedBills,
   expenses as seedExpenses,
-  householdMembers as seedMembers,
   recurringBills as seedRecurringBills,
   settlements as seedSettlements,
 } from './mock-data';
 import type {
   Bill,
   Expense,
-  HouseholdMember,
   NewBillInput,
   NewExpenseInput,
   NewSettlementInput,
@@ -31,7 +29,6 @@ function generateId(): string {
 }
 
 type MoneyState = {
-  members: HouseholdMember[];
   expenses: Expense[];
   settlements: Settlement[];
   bills: Bill[];
@@ -90,7 +87,6 @@ type MoneyState = {
 };
 
 export const useMoneyStore = create<MoneyState>((set, get) => ({
-  members: seedMembers,
   expenses: seedExpenses,
   settlements: seedSettlements,
   bills: seedBills,

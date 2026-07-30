@@ -1,21 +1,15 @@
 import { splitEqualCents } from './money-math';
-import type { Bill, Expense, HouseholdMember, RecurringBillTemplate, Settlement } from './types';
+import type { Bill, Expense, RecurringBillTemplate, Settlement } from './types';
 
-// Local mock data only — no backend yet. See the note in types.ts: this
-// member list is intentionally separate from Kitchen's for Milestone 4.
+// Local mock data only — no backend yet. Household members live in
+// src/features/household/mock-data.ts — the ids referenced below ('you',
+// 'bella', 'karyn', 'nat') match that shared roster.
 
 function isoDaysFromToday(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
 }
-
-export const householdMembers: HouseholdMember[] = [
-  { id: 'you', name: 'You', isCurrentUser: true },
-  { id: 'bella', name: 'Bella', initials: 'B', isCurrentUser: false },
-  { id: 'karyn', name: 'Karyn', initials: 'K', isCurrentUser: false },
-  { id: 'nat', name: 'Nat', initials: 'N', isCurrentUser: false },
-];
 
 export const expenses: Expense[] = [
   {

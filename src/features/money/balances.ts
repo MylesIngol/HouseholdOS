@@ -1,4 +1,6 @@
-import type { Bill, Expense, HouseholdMember, Settlement } from './types';
+import type { HouseholdMember } from '@/features/household/types';
+
+import type { Bill, Expense, Settlement } from './types';
 
 // -----------------------------------------------------------------------------
 // Pure balance engine. No React/React Native imports — exercised directly by

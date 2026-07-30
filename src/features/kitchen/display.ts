@@ -1,5 +1,7 @@
 import { formatExpirationLabel, getExpirationUrgency } from './expiration';
-import type { HouseholdMember, InventoryItem } from './types';
+import type { HouseholdMember } from '@/features/household/types';
+
+import type { InventoryItem } from './types';
 
 // Single-item presentation helpers — kept separate from selectors.ts (which
 // operates on arrays) and from components (which shouldn't need to know the

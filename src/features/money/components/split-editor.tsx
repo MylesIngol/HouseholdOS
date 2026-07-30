@@ -6,7 +6,8 @@ import { Radii, Spacing } from '@/constants/theme';
 import { MemberMultiSelect } from '@/features/money/components/member-multi-select';
 import { formatCentsAsCurrency } from '@/features/money/display';
 import { dollarsToCents, splitEqualCents, sumShareCents } from '@/features/money/money-math';
-import type { HouseholdMember, SplitMode } from '@/features/money/types';
+import type { HouseholdMember } from '@/features/household/types';
+import type { SplitMode } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
 const SPLIT_MODE_OPTIONS: { value: SplitMode; label: string }[] = [

@@ -40,10 +40,9 @@ export type ExpirationInfo = {
 
 export type Ownership = 'shared' | 'personal';
 
-export type HouseholdMember = {
-  id: string;
-  name: string;
-};
+// HouseholdMember lives in src/features/household/types.ts now — Kitchen
+// references the shared roster (via ownerId below) rather than keeping its
+// own member type.
 
 export type InventoryItem = {
   id: string;

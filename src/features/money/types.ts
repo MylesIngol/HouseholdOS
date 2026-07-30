@@ -1,23 +1,10 @@
 // -----------------------------------------------------------------------------
 // Household members
 //
-// TEMPORARY: Money keeps its own household member list, separate from
-// Kitchen's (src/features/kitchen/mock-data.ts). This is intentional for
-// Milestone 4 — Money and Kitchen stay decoupled domains for now — but it
-// means the same real person currently has two independent mock records
-// across features. Before Supabase/auth lands, these should converge on one
-// shared household-member source (e.g. src/features/household/) so member
-// identity can't drift between features.
-// -----------------------------------------------------------------------------
-
-export type HouseholdMember = {
-  id: string;
-  name: string;
-  /** Falls back to initials derived from `name` when absent. */
-  initials?: string;
-  isCurrentUser: boolean;
-};
-
+// `HouseholdMember` now lives in src/features/household/types.ts — the one
+// canonical member source shared by Kitchen, Money, and Tasks (as of
+// Milestone 5). Money no longer defines or stores its own copy; import the
+// type from '@/features/household/types' instead.
 // -----------------------------------------------------------------------------
 // Shared shape for "how much of this does each participant owe"
 // -----------------------------------------------------------------------------

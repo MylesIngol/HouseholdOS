@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Row } from '@/components/ui/row';
 import { Spacing } from '@/constants/theme';
+import { useHouseholdStore } from '@/features/household/store';
 import { formatCentsAsCurrency, formatDueDateLabel } from '@/features/money/display';
 import { useMoneyStore } from '@/features/money/store';
 import type { Bill } from '@/features/money/types';
@@ -17,7 +18,7 @@ type BillRowProps = {
 /** An upcoming bill with a one-tap "Mark paid" — the only place a bill's debt gets created, guarded so tapping it twice can't duplicate anything. */
 export function BillRow({ bill, onPress }: BillRowProps) {
   const theme = useTheme();
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const markBillPaid = useMoneyStore((state) => state.markBillPaid);
   const currentUser = members.find((member) => member.isCurrentUser);
 

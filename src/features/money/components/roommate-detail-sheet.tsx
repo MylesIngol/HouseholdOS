@@ -16,8 +16,10 @@ import {
   dollarsToCents,
   isValidSettlementAmount,
 } from '@/features/money/money-math';
+import { useHouseholdStore } from '@/features/household/store';
+import type { HouseholdMember } from '@/features/household/types';
 import { useMoneyStore } from '@/features/money/store';
-import type { ActivityEntry, HouseholdMember } from '@/features/money/types';
+import type { ActivityEntry } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
 type RoommateDetailSheetProps = {
@@ -41,7 +43,7 @@ export function RoommateDetailSheet({
   onSelectActivity,
 }: RoommateDetailSheetProps) {
   const theme = useTheme();
-  const members = useMoneyStore((state) => state.members);
+  const members = useHouseholdStore((state) => state.members);
   const expenses = useMoneyStore((state) => state.expenses);
   const settlements = useMoneyStore((state) => state.settlements);
   const recordSettlement = useMoneyStore((state) => state.recordSettlement);

@@ -8,7 +8,8 @@ import {
   getVisibleRoommateBalances,
 } from './balances.ts';
 import { splitEqualCents } from './money-math.ts';
-import type { Expense, HouseholdMember, Settlement } from './types.ts';
+import type { HouseholdMember } from '@/features/household/types';
+import type { Expense, Settlement } from './types.ts';
 
 const members: HouseholdMember[] = [
   { id: 'you', name: 'You', isCurrentUser: true },

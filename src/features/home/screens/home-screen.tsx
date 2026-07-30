@@ -8,12 +8,16 @@ import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Stat } from '@/components/ui/stat';
 import { Spacing } from '@/constants/theme';
+import { getCurrentUser } from '@/features/household/selectors';
+import { useHouseholdStore } from '@/features/household/store';
 import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
 import { useKitchenStore } from '@/features/kitchen/store';
 import { getMoneySummary, getUpcomingBills } from '@/features/money/balances';
 import { formatCentsAsCurrency } from '@/features/money/display';
 import { useMoneyStore } from '@/features/money/store';
-import { choresLeftThisWeek, nextChore } from '@/features/tasks/mock-data';
+import { formatDueLabel, getOccurrenceAssigneeLabel } from '@/features/tasks/display';
+import { getDueUrgency, getMyOpenOccurrences } from '@/features/tasks/selectors';
+import { useTasksStore } from '@/features/tasks/store';
 
 // Placeholder for the household's display name until household naming/settings
 // exists — swap this for the real household name when that's available.
@@ -24,15 +28,22 @@ export function HomeScreen() {
   const expiringSoonCount = getExpiringSoonItems(items).length;
   const lowStockCount = getLowStockItems(items).length;
 
-  const moneyMembers = useMoneyStore((state) => state.members);
+  const householdMembers = useHouseholdStore((state) => state.members);
+  const currentUser = getCurrentUser(householdMembers);
+
   const expenses = useMoneyStore((state) => state.expenses);
   const settlements = useMoneyStore((state) => state.settlements);
   const bills = useMoneyStore((state) => state.bills);
-  const currentUser = moneyMembers.find((member) => member.isCurrentUser);
   const moneySummary = currentUser
-    ? getMoneySummary(currentUser.id, moneyMembers, expenses, settlements)
+    ? getMoneySummary(currentUser.id, householdMembers, expenses, settlements)
     : { youOweCents: 0, youAreOwedCents: 0 };
   const upcomingBillsCount = getUpcomingBills(bills).length;
+
+  const choreOccurrences = useTasksStore((state) => state.occurrences);
+  const myChores = currentUser ? getMyOpenOccurrences(choreOccurrences, currentUser.id) : [];
+  const nextChore = myChores[0];
+  const nextChoreTone =
+    nextChore && getDueUrgency(nextChore.dueDate) === 'overdue' ? 'danger' : 'warning';
 
   return (
     <Screen>
@@ -74,13 +85,15 @@ export function HomeScreen() {
       <Section title="Tasks" action={{ label: 'View Tasks', href: '/tasks' }}>
         <Card>
           <ThemedText type="small" themeColor="textSecondary">
-            {choresLeftThisWeek} chores left this week
+            {myChores.length === 0
+              ? 'Nothing on your plate right now'
+              : `${myChores.length} ${myChores.length === 1 ? 'chore' : 'chores'} on your plate`}
           </ThemedText>
           {nextChore && (
             <Row
               title={nextChore.title}
-              subtitle={`Assigned to ${nextChore.assignee}`}
-              trailing={<Pill label={nextChore.dueLabel} tone="warning" />}
+              subtitle={`Assigned to ${getOccurrenceAssigneeLabel(nextChore, householdMembers)}`}
+              trailing={<Pill label={formatDueLabel(nextChore.dueDate)} tone={nextChoreTone} />}
             />
           )}
         </Card>

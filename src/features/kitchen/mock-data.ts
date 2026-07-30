@@ -1,16 +1,13 @@
 import { addDaysIso } from './expiration';
-import type { GroceryListEntry, HouseholdMember, InventoryItem } from './types';
+import type { GroceryListEntry, InventoryItem } from './types';
 
 // Local mock data only — no backend yet. Dates are generated relative to
 // "now" (rather than hardcoded) so the expiring-soon/low-stock demo data
-// stays meaningful no matter when this runs.
+// stays meaningful no matter when this runs. Household members now live in
+// src/features/household/mock-data.ts — see item #6 below for how ownership
+// references that shared roster.
 
 const now = new Date().toISOString();
-
-export const householdMembers: HouseholdMember[] = [
-  { id: 'you', name: 'You' },
-  { id: 'sam', name: 'Sam' },
-];
 
 export const inventoryItems: InventoryItem[] = [
   {
@@ -77,8 +74,11 @@ export const inventoryItems: InventoryItem[] = [
     status: 'in_stock',
     quantity: 6,
     unit: 'count',
-    ownership: 'personal',
-    ownerId: 'sam',
+    // Was personal to Kitchen's old mock-only "Sam" — now that Kitchen reads
+    // the shared household roster (You/Bella/Karyn/Nat), there's no
+    // equivalent identity to remap this to, so it becomes shared rather than
+    // inventing a relationship between two previously-separate mock people.
+    ownership: 'shared',
     addedAt: now,
     updatedAt: now,
   },

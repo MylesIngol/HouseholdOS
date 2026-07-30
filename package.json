@@ -45,7 +45,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "format": "prettier --write .",
-    "test:money": "node --experimental-strip-types --test src/features/money/*.test.ts"
+    "test:money": "node --experimental-strip-types --test src/features/money/*.test.ts",
+    "test:tasks": "node --experimental-strip-types --test src/features/tasks/*.test.ts",
+    "test": "npm run test:money && npm run test:tasks"
   },
   "private": true
 }

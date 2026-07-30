@@ -5,32 +5,36 @@ import { Radii, Spacing } from '@/constants/theme';
 import type { HouseholdMember } from '@/features/household/types';
 import { useTheme } from '@/hooks/use-theme';
 
-type MemberMultiSelectProps = {
+type RotationPickerProps = {
   members: HouseholdMember[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
+  /** Ordered member ids — rotation always advances through this exact order. */
+  order: string[];
+  onChange: (order: string[]) => void;
 };
 
 /**
- * Toggleable member pills for participant selection — distinct from the
- * shared single-select `PillSelector` since choosing expense/bill
- * participants means picking any number of people, not exactly one.
+ * An ordered multi-select: tap a member to add them to the end of the
+ * rotation, tap again to remove them. No drag-to-reorder — order of
+ * selection is the rotation order, which is simple, deterministic, and
+ * avoids building a reordering UI for what's normally a 2-4 person list.
  */
-export function MemberMultiSelect({ members, selectedIds, onChange }: MemberMultiSelectProps) {
+export function RotationPicker({ members, order, onChange }: RotationPickerProps) {
   const theme = useTheme();
 
   function toggle(memberId: string) {
-    if (selectedIds.includes(memberId)) {
-      onChange(selectedIds.filter((id) => id !== memberId));
+    if (order.includes(memberId)) {
+      onChange(order.filter((id) => id !== memberId));
     } else {
-      onChange([...selectedIds, memberId]);
+      onChange([...order, memberId]);
     }
   }
 
   return (
     <View style={styles.row}>
       {members.map((member) => {
-        const selected = selectedIds.includes(member.id);
+        const position = order.indexOf(member.id);
+        const selected = position !== -1;
+        const label = member.isCurrentUser ? 'You' : member.name;
         return (
           <Pressable
             key={member.id}
@@ -44,7 +48,7 @@ export function MemberMultiSelect({ members, selectedIds, onChange }: MemberMult
               type="smallBold"
               style={{ color: selected ? theme.onAccent : theme.textSecondary }}
             >
-              {member.isCurrentUser ? 'You' : member.name}
+              {selected ? `${position + 1}. ${label}` : label}
             </ThemedText>
           </Pressable>
         );
