@@ -30,8 +30,16 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# env files — only .env.example is committed; real values (Supabase URL/key)
+# stay local. The publishable key is technically client-safe to expose, but
+# keeping .env out of git is still good hygiene and leaves room for anything
+# else that lands in it later.
+.env
 .env*.local
+
+# Supabase CLI local dev artifacts (not used yet, but harmless to pre-ignore)
+supabase/.branches
+supabase/.temp
 
 # typescript
 *.tsbuildinfo
