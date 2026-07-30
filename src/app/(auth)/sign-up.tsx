@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -10,16 +10,18 @@ import { mapAuthError, validateEmail, validatePassword } from '@/features/auth/e
 import { useTheme } from '@/hooks/use-theme';
 import { supabase } from '@/lib/supabase';
 
-export default function SignInScreen() {
+export default function SignUpScreen() {
   const theme = useTheme();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
-  async function handleSignIn() {
+  async function handleSignUp() {
     const emailError = validateEmail(email);
-    const passwordError = password ? undefined : 'Password is required.';
+    const passwordError = validatePassword(password);
     if (emailError || passwordError) {
       setError(emailError ?? passwordError);
       return;
@@ -27,22 +29,60 @@ export default function SignInScreen() {
 
     setError(undefined);
     setIsSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: { data: { display_name: name.trim() || undefined } },
     });
     setIsSubmitting(false);
 
-    if (signInError) setError(mapAuthError(signInError));
-    // On success, the root layout's session listener re-renders past the
-    // (auth) group automatically — no manual navigation needed here.
+    if (signUpError) {
+      setError(mapAuthError(signUpError));
+      return;
+    }
+
+    // If email confirmation is enabled on the project, signUp succeeds but
+    // returns no session yet — tell the user to check their inbox instead of
+    // silently doing nothing. If confirmation is disabled (e.g. local/dev),
+    // a session comes back immediately and the root layout's listener moves
+    // on by itself.
+    if (!data.session) setConfirmationSent(true);
+  }
+
+  if (confirmationSent) {
+    return (
+      <Screen>
+        <View style={styles.header}>
+          <ThemedText type="title">Check your email</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            We sent a confirmation link to {email.trim()}. Open it to finish creating your
+            account, then come back and sign in.
+          </ThemedText>
+        </View>
+        <PrimaryButton label="Back to sign in" onPress={() => router.replace('/(auth)/sign-in')} />
+      </Screen>
+    );
   }
 
   return (
     <Screen>
       <View style={styles.header}>
-        <ThemedText type="title">Sign in</ThemedText>
-        <ThemedText themeColor="textSecondary">Welcome back to HouseholdOS.</ThemedText>
+        <ThemedText type="title">Create account</ThemedText>
+        <ThemedText themeColor="textSecondary">Join or start a household on HouseholdOS.</ThemedText>
+      </View>
+
+      <View style={styles.field}>
+        <ThemedText type="label" themeColor="muted">
+          Name
+        </ThemedText>
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder="What should we call you?"
+          placeholderTextColor={theme.muted}
+          textContentType="name"
+          style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
+        />
       </View>
 
       <View style={styles.field}>
@@ -69,10 +109,10 @@ export default function SignInScreen() {
         <TextInput
           value={password}
           onChangeText={setPassword}
-          placeholder="Password"
+          placeholder="At least 6 characters"
           placeholderTextColor={theme.muted}
           secureTextEntry
-          textContentType="password"
+          textContentType="newPassword"
           style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
         />
       </View>
@@ -84,15 +124,15 @@ export default function SignInScreen() {
       )}
 
       <PrimaryButton
-        label={isSubmitting ? 'Signing in…' : 'Sign in'}
-        onPress={isSubmitting ? undefined : handleSignIn}
+        label={isSubmitting ? 'Creating account…' : 'Create account'}
+        onPress={isSubmitting ? undefined : handleSignUp}
         style={isSubmitting ? styles.disabled : undefined}
       />
 
-      <Link href="/(auth)/sign-up" asChild>
+      <Link href="/(auth)/sign-in" asChild>
         <Pressable hitSlop={8} style={styles.footerLink}>
           <ThemedText type="small" themeColor="textSecondary">
-            New to HouseholdOS? <ThemedText type="linkPrimary">Create an account</ThemedText>
+            Already have an account? <ThemedText type="linkPrimary">Sign in</ThemedText>
           </ThemedText>
         </Pressable>
       </Link>

@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Stat } from '@/components/ui/stat';
 import { Spacing } from '@/constants/theme';
+import { AccountSheet } from '@/features/auth/components/account-sheet';
 import { getCurrentUser } from '@/features/household/selectors';
 import { useHouseholdStore } from '@/features/household/store';
 import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
@@ -24,6 +26,8 @@ import { useTasksStore } from '@/features/tasks/store';
 const homeHeaderTitle = 'HouseholdOS';
 
 export function HomeScreen() {
+  const [accountOpen, setAccountOpen] = useState(false);
+
   const items = useKitchenStore((state) => state.items);
   const expiringSoonCount = getExpiringSoonItems(items).length;
   const lowStockCount = getLowStockItems(items).length;
@@ -51,7 +55,14 @@ export function HomeScreen() {
         <ThemedText type="smallBold" themeColor="muted">
           {homeHeaderTitle}
         </ThemedText>
+        <Pressable onPress={() => setAccountOpen(true)} hitSlop={8}>
+          <ThemedText type="small" themeColor="muted">
+            Account
+          </ThemedText>
+        </Pressable>
       </View>
+
+      <AccountSheet visible={accountOpen} onClose={() => setAccountOpen(false)} />
 
       <Section title="Kitchen" action={{ label: 'View Kitchen', href: '/kitchen' }}>
         <Card style={styles.statRow}>
@@ -104,7 +115,9 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    gap: Spacing.one,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   statRow: {
     flexDirection: 'row',
