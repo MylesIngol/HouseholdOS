@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Row } from '@/components/ui/row';
 import { Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import type { HouseholdMember } from '@/features/household/types';
 import {
   formatCompletedLabel,
@@ -36,7 +36,8 @@ function historySubtitle(occurrence: ChoreOccurrence, members: HouseholdMember[]
  * completed, when, who it was assigned to, and who actually did it.
  */
 export function HistorySheet({ visible, onClose, occurrences }: HistorySheetProps) {
-  const members = useHouseholdStore((state) => state.members);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
   const history = getChoreHistory(occurrences);
 
   return (

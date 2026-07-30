@@ -5,12 +5,17 @@ import { ThemedText } from '@/components/themed-text';
 import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
 import { Radii, Spacing } from '@/constants/theme';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { getCurrentUser } from '@/features/household/selectors';
-import { useHouseholdStore } from '@/features/household/store';
 import { RotationPicker } from '@/features/tasks/components/rotation-picker';
 import { getRecurrenceLabel } from '@/features/tasks/display';
+import {
+  useAddChore,
+  useDeleteOneTimeChore,
+  useStopChore,
+  useUpdateChore,
+} from '@/features/tasks/queries';
 import { addDays, todayIso } from '@/features/tasks/recurrence';
-import { useTasksStore } from '@/features/tasks/store';
 import type {
   AssignmentType,
   ChoreOccurrence,
@@ -65,12 +70,13 @@ const DUE_DATE_OPTIONS: { value: DueDateQuickPick; label: string; days: number |
  */
 export function ChoreSheet({ visible, onClose, template, occurrence }: ChoreSheetProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
   const currentUser = getCurrentUser(members);
-  const addChore = useTasksStore((state) => state.addChore);
-  const updateChore = useTasksStore((state) => state.updateChore);
-  const stopChore = useTasksStore((state) => state.stopChore);
-  const deleteOneTimeChore = useTasksStore((state) => state.deleteOneTimeChore);
+  const addChore = useAddChore();
+  const updateChore = useUpdateChore();
+  const stopChore = useStopChore();
+  const deleteOneTimeChore = useDeleteOneTimeChore();
 
   const isEditMode = !!template;
 
@@ -140,19 +146,19 @@ export function ChoreSheet({ visible, onClose, template, occurrence }: ChoreShee
     const trimmedDescription = description.trim() || undefined;
 
     if (isEditMode && template) {
-      updateChore(
-        template.id,
-        {
+      updateChore.mutate({
+        id: template.id,
+        patch: {
           title: trimmedTitle,
           description: trimmedDescription,
           assignmentType,
           assigneeId: assignmentType === 'fixed' ? assigneeId : undefined,
           rotationMemberIds: assignmentType === 'rotating' ? rotationOrder : undefined,
         },
-        assignmentType === 'rotating' ? currentAssigneeId : undefined,
-      );
+        explicitCurrentAssigneeId: assignmentType === 'rotating' ? currentAssigneeId : undefined,
+      });
     } else {
-      addChore({
+      addChore.mutate({
         title: trimmedTitle,
         description: trimmedDescription,
         assignmentType,
@@ -167,13 +173,13 @@ export function ChoreSheet({ visible, onClose, template, occurrence }: ChoreShee
 
   function handleStop() {
     if (!template) return;
-    stopChore(template.id);
+    stopChore.mutate(template.id);
     onClose();
   }
 
   function handleDelete() {
     if (!template) return;
-    deleteOneTimeChore(template.id);
+    deleteOneTimeChore.mutate(template.id);
     onClose();
   }
 

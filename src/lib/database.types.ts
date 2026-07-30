@@ -200,6 +200,101 @@ export type Database = {
           },
         ];
       };
+      chore_templates: {
+        Row: {
+          id: string;
+          household_id: string;
+          title: string;
+          description: string | null;
+          assignment_type: string;
+          assignee_household_member_id: string | null;
+          recurrence: string;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never; // created only via create_chore_template()
+        Update: never; // edited only via update_chore_template()/stop_chore_template()
+        Relationships: [
+          {
+            foreignKeyName: 'chore_templates_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'chore_templates_assignee_household_member_id_household_id_fkey';
+            columns: ['assignee_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      chore_rotation_members: {
+        Row: {
+          id: string;
+          template_id: string;
+          household_id: string;
+          household_member_id: string;
+          position: number;
+        };
+        Insert: never; // created only via create_chore_template()/update_chore_template()
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'chore_rotation_members_template_id_household_id_fkey';
+            columns: ['template_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'chore_templates';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'chore_rotation_members_household_member_id_household_id_fkey';
+            columns: ['household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      chore_occurrences: {
+        Row: {
+          id: string;
+          template_id: string;
+          household_id: string;
+          title: string;
+          description: string | null;
+          assigned_household_member_id: string;
+          due_date: string | null;
+          status: string;
+          completed_at: string | null;
+          completed_by_household_member_id: string | null;
+          created_at: string;
+        };
+        // created only via create_chore_template()/complete_chore_occurrence();
+        // edited only via update_chore_template()/complete_chore_occurrence()/
+        // undo_chore_completion()/stop_chore_template().
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'chore_occurrences_template_id_household_id_fkey';
+            columns: ['template_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'chore_templates';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'chore_occurrences_assigned_household_member_id_household_id_fkey';
+            columns: ['assigned_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -214,6 +309,47 @@ export type Database = {
       create_household_invite: {
         Args: { p_household_id: string };
         Returns: Database['public']['Tables']['household_invites']['Row'];
+      };
+      create_chore_template: {
+        Args: {
+          p_household_id: string;
+          p_title: string;
+          p_description: string | null;
+          p_assignment_type: string;
+          p_assignee_member_id: string | null;
+          p_rotation_member_ids: string[] | null;
+          p_recurrence: string;
+          p_due_date: string | null;
+        };
+        Returns: Database['public']['Tables']['chore_templates']['Row'];
+      };
+      update_chore_template: {
+        Args: {
+          p_template_id: string;
+          p_title: string | null;
+          p_description: string | null;
+          p_assignment_type: string | null;
+          p_assignee_member_id: string | null;
+          p_rotation_member_ids: string[] | null;
+          p_explicit_current_assignee_id: string | null;
+        };
+        Returns: Database['public']['Tables']['chore_templates']['Row'];
+      };
+      stop_chore_template: {
+        Args: { p_template_id: string };
+        Returns: undefined;
+      };
+      delete_one_time_chore: {
+        Args: { p_template_id: string };
+        Returns: undefined;
+      };
+      complete_chore_occurrence: {
+        Args: { p_occurrence_id: string };
+        Returns: string | null;
+      };
+      undo_chore_completion: {
+        Args: { p_occurrence_id: string; p_generated_occurrence_id: string | null };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

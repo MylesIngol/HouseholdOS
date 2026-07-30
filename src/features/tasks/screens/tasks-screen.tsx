@@ -7,13 +7,19 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Radii, Spacing } from '@/constants/theme';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { getCurrentUser } from '@/features/household/selectors';
-import { useHouseholdStore } from '@/features/household/store';
 import { ChoreRow } from '@/features/tasks/components/chore-row';
 import { ChoreSheet } from '@/features/tasks/components/chore-sheet';
 import { HistorySheet } from '@/features/tasks/components/history-sheet';
+import {
+  useChoreOccurrences,
+  useChoreTemplates,
+  useCompleteOccurrence,
+  useUndoChoreCompletion,
+  type CompleteOccurrenceResult,
+} from '@/features/tasks/queries';
 import { getHouseholdOpenOccurrences, getMyOpenOccurrences } from '@/features/tasks/selectors';
-import { useTasksStore } from '@/features/tasks/store';
 import type { ChoreOccurrence, ChoreTemplate } from '@/features/tasks/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -21,14 +27,16 @@ type ChoreSheetTarget = 'new' | { template: ChoreTemplate; occurrence: ChoreOccu
 
 export function TasksScreen() {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
   const currentUser = getCurrentUser(members);
-  const templates = useTasksStore((state) => state.templates);
-  const occurrences = useTasksStore((state) => state.occurrences);
-  const completeOccurrence = useTasksStore((state) => state.completeOccurrence);
-  const lastCompletion = useTasksStore((state) => state.lastCompletion);
-  const undoLastCompletion = useTasksStore((state) => state.undoLastCompletion);
-  const dismissLastCompletion = useTasksStore((state) => state.dismissLastCompletion);
+  const { data: templates = [] } = useChoreTemplates();
+  const { data: occurrences = [] } = useChoreOccurrences();
+  const completeOccurrence = useCompleteOccurrence();
+  const undoChoreCompletion = useUndoChoreCompletion();
+  const [lastCompletion, setLastCompletion] = useState<CompleteOccurrenceResult | undefined>(
+    undefined,
+  );
 
   const [choreSheetTarget, setChoreSheetTarget] = useState<ChoreSheetTarget>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -50,8 +58,15 @@ export function TasksScreen() {
   }
 
   function handleComplete(occurrence: ChoreOccurrence) {
-    if (!currentUser) return;
-    completeOccurrence(occurrence.id, currentUser.id);
+    completeOccurrence.mutate(occurrence.id, {
+      onSuccess: (result) => setLastCompletion(result),
+    });
+  }
+
+  function handleUndo() {
+    if (!lastCompletion) return;
+    undoChoreCompletion.mutate(lastCompletion);
+    setLastCompletion(undefined);
   }
 
   return (
@@ -71,12 +86,12 @@ export function TasksScreen() {
             Marked done
           </ThemedText>
           <View style={styles.undoActions}>
-            <Pressable onPress={undoLastCompletion} hitSlop={8}>
+            <Pressable onPress={handleUndo} hitSlop={8}>
               <ThemedText type="small" style={{ color: theme.accent }}>
                 Undo
               </ThemedText>
             </Pressable>
-            <Pressable onPress={dismissLastCompletion} hitSlop={8}>
+            <Pressable onPress={() => setLastCompletion(undefined)} hitSlop={8}>
               <ThemedText type="small" themeColor="muted">
                 Dismiss
               </ThemedText>
