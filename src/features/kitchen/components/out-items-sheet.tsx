@@ -5,8 +5,8 @@ import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Row } from '@/components/ui/row';
 import { getLocationLabel } from '@/features/kitchen/display';
+import { useAddInventoryItemToGrocery, useInventoryItems } from '@/features/kitchen/queries';
 import { getOutItems } from '@/features/kitchen/selectors';
-import { useKitchenStore } from '@/features/kitchen/store';
 
 type OutItemsSheetProps = {
   visible: boolean;
@@ -15,8 +15,8 @@ type OutItemsSheetProps = {
 
 /** The subtle, non-permanent way to get back to Out items — mainly for re-adding them to the grocery list. */
 export function OutItemsSheet({ visible, onClose }: OutItemsSheetProps) {
-  const items = useKitchenStore((state) => state.items);
-  const addToGrocery = useKitchenStore((state) => state.addInventoryItemToGrocery);
+  const { data: items = [] } = useInventoryItems();
+  const addToGrocery = useAddInventoryItemToGrocery();
   const outItems = getOutItems(items);
 
   return (
@@ -33,7 +33,7 @@ export function OutItemsSheet({ visible, onClose }: OutItemsSheetProps) {
             title={item.name}
             subtitle={getLocationLabel(item.location)}
             trailing={
-              <Pressable onPress={() => addToGrocery(item.id)} hitSlop={8}>
+              <Pressable onPress={() => addToGrocery.mutate(item.id)} hitSlop={8}>
                 <ThemedText type="linkPrimary">Add to list</ThemedText>
               </Pressable>
             }

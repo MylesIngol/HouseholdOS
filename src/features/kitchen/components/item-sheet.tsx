@@ -6,7 +6,12 @@ import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
 import { Radii, Spacing } from '@/constants/theme';
 import { addDaysIso, formatExpirationLabel } from '@/features/kitchen/expiration';
-import { useKitchenStore } from '@/features/kitchen/store';
+import {
+  useAddInventoryItemToGrocery,
+  useAddItem,
+  useDeleteItem,
+  useUpdateItem,
+} from '@/features/kitchen/queries';
 import type {
   ExpirationInfo,
   InventoryItem,
@@ -14,7 +19,7 @@ import type {
   Ownership,
   StorageLocation,
 } from '@/features/kitchen/types';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { useTheme } from '@/hooks/use-theme';
 
 type ItemSheetProps = {
@@ -53,12 +58,12 @@ const EXPIRATION_OPTIONS: { value: ExpirationOptionValue; label: string; days: n
 
 export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const theme = useTheme();
-  const addItem = useKitchenStore((state) => state.addItem);
-  const updateItem = useKitchenStore((state) => state.updateItem);
-  const setItemStatus = useKitchenStore((state) => state.setStatus);
-  const addToGrocery = useKitchenStore((state) => state.addInventoryItemToGrocery);
-  const deleteItem = useKitchenStore((state) => state.deleteItem);
-  const householdMembers = useHouseholdStore((state) => state.members);
+  const { data: household } = useMyHousehold();
+  const { data: householdMembers = [] } = useHouseholdMembers(household?.id);
+  const addItemMutation = useAddItem();
+  const updateItemMutation = useUpdateItem();
+  const addToGroceryMutation = useAddInventoryItemToGrocery();
+  const deleteItemMutation = useDeleteItem();
 
   const isEditMode = !!item;
 
@@ -97,7 +102,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   function handleStatusChange(next: InventoryStatus) {
     setStatus(next);
     if (item) {
-      setItemStatus(item.id, next);
+      updateItemMutation.mutate({ id: item.id, patch: { status: next } });
     }
   }
 
@@ -135,13 +140,13 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
 
   function handleAddToGrocery() {
     if (!item) return;
-    addToGrocery(item.id);
+    addToGroceryMutation.mutate(item.id);
     onClose();
   }
 
   function handleDelete() {
     if (!item) return;
-    deleteItem(item.id);
+    deleteItemMutation.mutate(item.id);
     onClose();
   }
 
@@ -153,18 +158,21 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
     const trimmedNotes = notes.trim();
 
     if (isEditMode && item) {
-      updateItem(item.id, {
-        name: trimmedName,
-        location,
-        status,
-        quantity,
-        expiration,
-        ownership,
-        ownerId: ownership === 'personal' ? ownerId : undefined,
-        notes: trimmedNotes || undefined,
+      updateItemMutation.mutate({
+        id: item.id,
+        patch: {
+          name: trimmedName,
+          location,
+          status,
+          quantity,
+          expiration,
+          ownership,
+          ownerId: ownership === 'personal' ? ownerId : undefined,
+          notes: trimmedNotes || undefined,
+        },
       });
     } else {
-      addItem({
+      addItemMutation.mutate({
         name: trimmedName,
         location,
         status,

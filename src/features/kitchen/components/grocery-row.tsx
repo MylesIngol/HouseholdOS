@@ -5,7 +5,11 @@ import { ThemedText } from '@/components/themed-text';
 import { PillSelector } from '@/components/ui/pill-selector';
 import { Row } from '@/components/ui/row';
 import { Radii, Spacing } from '@/constants/theme';
-import { useKitchenStore } from '@/features/kitchen/store';
+import {
+  usePurchaseGroceryItem,
+  useRemoveGroceryItem,
+  useUpdateGroceryItem,
+} from '@/features/kitchen/queries';
 import type { GroceryListEntry, StorageLocation } from '@/features/kitchen/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -24,15 +28,15 @@ export function GroceryRow({ entry }: GroceryRowProps) {
   const [pickingLocation, setPickingLocation] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(entry.name);
-  const purchaseGroceryItem = useKitchenStore((state) => state.purchaseGroceryItem);
-  const removeGroceryItem = useKitchenStore((state) => state.removeGroceryItem);
-  const updateGroceryItem = useKitchenStore((state) => state.updateGroceryItem);
+  const purchaseGroceryItem = usePurchaseGroceryItem();
+  const removeGroceryItem = useRemoveGroceryItem();
+  const updateGroceryItem = useUpdateGroceryItem();
 
   function handlePurchasePress() {
     // Linked entries already know where they belong — restock instantly.
     // Unlinked (manually typed) entries need a quick location pick first.
     if (entry.inventoryItemId) {
-      purchaseGroceryItem(entry.id);
+      purchaseGroceryItem.mutate({ groceryItemId: entry.id });
     } else {
       setEditing(false);
       setPickingLocation((current) => !current);
@@ -47,12 +51,12 @@ export function GroceryRow({ entry }: GroceryRowProps) {
 
   function handleSaveEdit() {
     if (!draftName.trim()) return;
-    updateGroceryItem(entry.id, draftName);
+    updateGroceryItem.mutate({ id: entry.id, name: draftName });
     setEditing(false);
   }
 
   function handleConfirmLocation(location: StorageLocation) {
-    purchaseGroceryItem(entry.id, location);
+    purchaseGroceryItem.mutate({ groceryItemId: entry.id, location });
     setPickingLocation(false);
   }
 
@@ -70,7 +74,7 @@ export function GroceryRow({ entry }: GroceryRowProps) {
                 Edit
               </ThemedText>
             </Pressable>
-            <Pressable onPress={() => removeGroceryItem(entry.id)} hitSlop={8}>
+            <Pressable onPress={() => removeGroceryItem.mutate(entry.id)} hitSlop={8}>
               <ThemedText type="small" themeColor="muted">
                 Remove
               </ThemedText>

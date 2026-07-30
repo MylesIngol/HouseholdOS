@@ -12,8 +12,8 @@ import { Spacing } from '@/constants/theme';
 import { AccountSheet } from '@/features/auth/components/account-sheet';
 import { getCurrentUser } from '@/features/household/selectors';
 import { useHouseholdStore } from '@/features/household/store';
+import { useInventoryItems } from '@/features/kitchen/queries';
 import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
-import { useKitchenStore } from '@/features/kitchen/store';
 import { getMoneySummary, getUpcomingBills } from '@/features/money/balances';
 import { formatCentsAsCurrency } from '@/features/money/display';
 import { useMoneyStore } from '@/features/money/store';
@@ -28,7 +28,7 @@ const homeHeaderTitle = 'HouseholdOS';
 export function HomeScreen() {
   const [accountOpen, setAccountOpen] = useState(false);
 
-  const items = useKitchenStore((state) => state.items);
+  const { data: items = [] } = useInventoryItems();
   const expiringSoonCount = getExpiringSoonItems(items).length;
   const lowStockCount = getLowStockItems(items).length;
 

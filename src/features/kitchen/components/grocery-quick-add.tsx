@@ -3,18 +3,18 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing } from '@/constants/theme';
-import { useKitchenStore } from '@/features/kitchen/store';
+import { useAddGroceryItem } from '@/features/kitchen/queries';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Always-visible single-line add field — no sheet, no modal, just type and submit. */
 export function GroceryQuickAdd() {
   const theme = useTheme();
   const [text, setText] = useState('');
-  const addGroceryItem = useKitchenStore((state) => state.addGroceryItem);
+  const addGroceryItem = useAddGroceryItem();
 
   function submit() {
     if (!text.trim()) return;
-    addGroceryItem(text);
+    addGroceryItem.mutate(text);
     setText('');
   }
 

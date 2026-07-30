@@ -104,6 +104,102 @@ export type Database = {
           },
         ];
       };
+      inventory_items: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          category: string;
+          location: string;
+          status: string;
+          quantity: number | null;
+          unit: string | null;
+          expiration_date: string | null;
+          expiration_confidence: string | null;
+          ownership: string;
+          owner_household_member_id: string | null;
+          notes: string | null;
+          added_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          household_id: string;
+          name: string;
+          category?: string;
+          location: string;
+          status?: string;
+          quantity?: number | null;
+          unit?: string | null;
+          expiration_date?: string | null;
+          expiration_confidence?: string | null;
+          ownership?: string;
+          owner_household_member_id?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          name?: string;
+          category?: string;
+          location?: string;
+          status?: string;
+          quantity?: number | null;
+          unit?: string | null;
+          expiration_date?: string | null;
+          expiration_confidence?: string | null;
+          ownership?: string;
+          owner_household_member_id?: string | null;
+          notes?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'inventory_items_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_items_owner_household_member_id_household_id_fkey';
+            columns: ['owner_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      grocery_list_entries: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          added_at: string;
+          inventory_item_id: string | null;
+        };
+        Insert: {
+          household_id: string;
+          name: string;
+          inventory_item_id?: string | null;
+        };
+        Update: {
+          name?: string;
+          inventory_item_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'grocery_list_entries_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'grocery_list_entries_inventory_item_id_household_id_fkey';
+            columns: ['inventory_item_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'inventory_items';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

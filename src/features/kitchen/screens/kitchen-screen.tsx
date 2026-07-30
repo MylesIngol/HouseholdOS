@@ -14,6 +14,7 @@ import { GroceryRow } from '@/features/kitchen/components/grocery-row';
 import { InventoryRow } from '@/features/kitchen/components/inventory-row';
 import { ItemSheet } from '@/features/kitchen/components/item-sheet';
 import { OutItemsSheet } from '@/features/kitchen/components/out-items-sheet';
+import { useGroceryItems, useInventoryItems } from '@/features/kitchen/queries';
 import {
   filterBySearch,
   getActiveItems,
@@ -23,7 +24,6 @@ import {
   getOutItems,
   type LocationFilter,
 } from '@/features/kitchen/selectors';
-import { useKitchenStore } from '@/features/kitchen/store';
 import type { InventoryItem } from '@/features/kitchen/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -38,8 +38,8 @@ type SheetTarget = 'new' | InventoryItem;
 
 export function KitchenScreen() {
   const theme = useTheme();
-  const items = useKitchenStore((state) => state.items);
-  const groceryItems = useKitchenStore((state) => state.groceryItems);
+  const { data: items = [] } = useInventoryItems();
+  const { data: groceryItems = [] } = useGroceryItems();
 
   const [filter, setFilter] = useState<LocationFilter>('all');
   const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);

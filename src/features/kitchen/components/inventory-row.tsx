@@ -1,6 +1,6 @@
 import { Pill } from '@/components/ui/pill';
 import { Row } from '@/components/ui/row';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { getItemSubtitle, getPrimaryBadge } from '@/features/kitchen/display';
 import type { InventoryItem } from '@/features/kitchen/types';
 
@@ -10,7 +10,8 @@ type InventoryRowProps = {
 };
 
 export function InventoryRow({ item, onPress }: InventoryRowProps) {
-  const householdMembers = useHouseholdStore((state) => state.members);
+  const { data: household } = useMyHousehold();
+  const { data: householdMembers = [] } = useHouseholdMembers(household?.id);
   const badge = getPrimaryBadge(item);
 
   return (
