@@ -23,20 +23,21 @@ import { BillSheet } from '@/features/money/components/bill-sheet';
 import { ExpenseSheet } from '@/features/money/components/expense-sheet';
 import { RoommateDetailSheet } from '@/features/money/components/roommate-detail-sheet';
 import { SettlementDetailSheet } from '@/features/money/components/settlement-detail-sheet';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import type { HouseholdMember } from '@/features/household/types';
 import { formatCentsAsCurrency } from '@/features/money/display';
-import { useMoneyStore } from '@/features/money/store';
+import { useBills, useExpenses, useSettlements } from '@/features/money/queries';
 import type { ActivityEntry, Bill, Expense, Settlement } from '@/features/money/types';
 
 type ExpenseSheetTarget = 'new' | Expense | null;
 type BillSheetTarget = 'new' | Bill | null;
 
 export function MoneyScreen() {
-  const members = useHouseholdStore((state) => state.members);
-  const expenses = useMoneyStore((state) => state.expenses);
-  const settlements = useMoneyStore((state) => state.settlements);
-  const bills = useMoneyStore((state) => state.bills);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const { data: expenses = [] } = useExpenses();
+  const { data: settlements = [] } = useSettlements();
+  const { data: bills = [] } = useBills();
   const currentUser = members.find((member) => member.isCurrentUser);
 
   const [expenseSheetTarget, setExpenseSheetTarget] = useState<ExpenseSheetTarget>(null);

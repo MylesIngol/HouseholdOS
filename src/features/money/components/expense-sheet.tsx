@@ -5,11 +5,11 @@ import { ThemedText } from '@/components/themed-text';
 import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
 import { Radii, Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { isSplitReadyToSave, SplitEditor } from '@/features/money/components/split-editor';
 import { getCategoryLabel, getDeleteExpenseWarning } from '@/features/money/display';
 import { centsToDollarsInput, dollarsToCents, resolveShares } from '@/features/money/money-math';
-import { useMoneyStore } from '@/features/money/store';
+import { useAddExpense, useBills, useDeleteExpense, useUpdateExpense } from '@/features/money/queries';
 import type { Expense, ExpenseCategory, SplitMode } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -31,11 +31,12 @@ function todayIso(): string {
 /** Fast "add expense" flow: description + amount is the minimum, everything else defaults to the common case and stays editable. Also doubles as the edit sheet when `expense` is provided. */
 export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
-  const bills = useMoneyStore((state) => state.bills);
-  const addExpense = useMoneyStore((state) => state.addExpense);
-  const updateExpense = useMoneyStore((state) => state.updateExpense);
-  const deleteExpense = useMoneyStore((state) => state.deleteExpense);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const { data: bills = [] } = useBills();
+  const addExpense = useAddExpense();
+  const updateExpense = useUpdateExpense();
+  const deleteExpense = useDeleteExpense();
   const currentUser = members.find((member) => member.isCurrentUser);
 
   const isEditMode = !!expense;
@@ -106,16 +107,16 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
     };
 
     if (isEditMode && expense) {
-      updateExpense(expense.id, payload);
+      updateExpense.mutate({ id: expense.id, input: payload });
     } else {
-      addExpense(payload);
+      addExpense.mutate(payload);
     }
     onClose();
   }
 
   function handleDelete() {
     if (!expense) return;
-    deleteExpense(expense.id);
+    deleteExpense.mutate(expense.id);
     onClose();
   }
 

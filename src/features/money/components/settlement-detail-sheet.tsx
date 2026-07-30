@@ -4,9 +4,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { formatActivityDateLabel, formatCentsAsCurrency } from '@/features/money/display';
-import { useMoneyStore } from '@/features/money/store';
+import { useDeleteSettlement } from '@/features/money/queries';
 import type { Settlement } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -27,8 +27,9 @@ export function SettlementDetailSheet({
   settlement,
 }: SettlementDetailSheetProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
-  const deleteSettlement = useMoneyStore((state) => state.deleteSettlement);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const deleteSettlement = useDeleteSettlement();
   const currentUser = members.find((member) => member.isCurrentUser);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -51,7 +52,7 @@ export function SettlementDetailSheet({
 
   function handleDelete() {
     if (!settlement) return;
-    deleteSettlement(settlement.id);
+    deleteSettlement.mutate(settlement.id);
     onClose();
   }
 

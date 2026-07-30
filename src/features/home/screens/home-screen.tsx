@@ -12,12 +12,11 @@ import { Spacing } from '@/constants/theme';
 import { AccountSheet } from '@/features/auth/components/account-sheet';
 import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { getCurrentUser } from '@/features/household/selectors';
-import { useHouseholdStore } from '@/features/household/store';
 import { useInventoryItems } from '@/features/kitchen/queries';
 import { getExpiringSoonItems, getLowStockItems } from '@/features/kitchen/selectors';
 import { getMoneySummary, getUpcomingBills } from '@/features/money/balances';
 import { formatCentsAsCurrency } from '@/features/money/display';
-import { useMoneyStore } from '@/features/money/store';
+import { useBills, useExpenses, useSettlements } from '@/features/money/queries';
 import { formatDueLabel, getOccurrenceAssigneeLabel } from '@/features/tasks/display';
 import { useChoreOccurrences } from '@/features/tasks/queries';
 import { getDueUrgency, getMyOpenOccurrences } from '@/features/tasks/selectors';
@@ -29,33 +28,24 @@ const homeHeaderTitle = 'HouseholdOS';
 export function HomeScreen() {
   const [accountOpen, setAccountOpen] = useState(false);
 
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const currentUser = getCurrentUser(members);
+
   const { data: items = [] } = useInventoryItems();
   const expiringSoonCount = getExpiringSoonItems(items).length;
   const lowStockCount = getLowStockItems(items).length;
 
-  // Money still reads the mock household roster until its own checkpoint F
-  // cutover — its expenses/bills also still use mock string member ids, so
-  // both sides of that comparison have to move together.
-  const householdMembers = useHouseholdStore((state) => state.members);
-  const currentUser = getCurrentUser(householdMembers);
-
-  const expenses = useMoneyStore((state) => state.expenses);
-  const settlements = useMoneyStore((state) => state.settlements);
-  const bills = useMoneyStore((state) => state.bills);
+  const { data: expenses = [] } = useExpenses();
+  const { data: settlements = [] } = useSettlements();
+  const { data: bills = [] } = useBills();
   const moneySummary = currentUser
-    ? getMoneySummary(currentUser.id, householdMembers, expenses, settlements)
+    ? getMoneySummary(currentUser.id, members, expenses, settlements)
     : { youOweCents: 0, youAreOwedCents: 0 };
   const upcomingBillsCount = getUpcomingBills(bills).length;
 
-  // Tasks is cut over (checkpoint E) — real household roster, real
-  // household_members.id-keyed occurrences.
-  const { data: household } = useMyHousehold();
-  const { data: realMembers = [] } = useHouseholdMembers(household?.id);
-  const realCurrentUser = getCurrentUser(realMembers);
   const { data: choreOccurrences = [] } = useChoreOccurrences();
-  const myChores = realCurrentUser
-    ? getMyOpenOccurrences(choreOccurrences, realCurrentUser.id)
-    : [];
+  const myChores = currentUser ? getMyOpenOccurrences(choreOccurrences, currentUser.id) : [];
   const nextChore = myChores[0];
   const nextChoreTone =
     nextChore && getDueUrgency(nextChore.dueDate) === 'overdue' ? 'danger' : 'warning';
@@ -114,7 +104,7 @@ export function HomeScreen() {
           {nextChore && (
             <Row
               title={nextChore.title}
-              subtitle={`Assigned to ${getOccurrenceAssigneeLabel(nextChore, realMembers)}`}
+              subtitle={`Assigned to ${getOccurrenceAssigneeLabel(nextChore, members)}`}
               trailing={<Pill label={formatDueLabel(nextChore.dueDate)} tone={nextChoreTone} />}
             />
           )}

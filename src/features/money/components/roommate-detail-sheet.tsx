@@ -16,9 +16,9 @@ import {
   dollarsToCents,
   isValidSettlementAmount,
 } from '@/features/money/money-math';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import type { HouseholdMember } from '@/features/household/types';
-import { useMoneyStore } from '@/features/money/store';
+import { useExpenses, useRecordSettlement, useSettlements } from '@/features/money/queries';
 import type { ActivityEntry } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -43,10 +43,11 @@ export function RoommateDetailSheet({
   onSelectActivity,
 }: RoommateDetailSheetProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
-  const expenses = useMoneyStore((state) => state.expenses);
-  const settlements = useMoneyStore((state) => state.settlements);
-  const recordSettlement = useMoneyStore((state) => state.recordSettlement);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const { data: expenses = [] } = useExpenses();
+  const { data: settlements = [] } = useSettlements();
+  const recordSettlement = useRecordSettlement();
   const currentUser = members.find((candidate) => candidate.isCurrentUser);
 
   const [amountText, setAmountText] = useState('');
@@ -80,7 +81,7 @@ export function RoommateDetailSheet({
 
   function handleRecordPayment() {
     if (!canRecord) return;
-    recordSettlement({
+    recordSettlement.mutate({
       fromMemberId,
       toMemberId,
       amountCents,

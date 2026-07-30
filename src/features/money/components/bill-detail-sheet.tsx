@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { formatActivityDateLabel, formatCentsAsCurrency } from '@/features/money/display';
-import { useMoneyStore } from '@/features/money/store';
+import { useExpenses } from '@/features/money/queries';
 import type { Bill, Expense } from '@/features/money/types';
 
 type BillDetailSheetProps = {
@@ -27,8 +27,9 @@ export function BillDetailSheet({
   bill,
   onViewLinkedExpense,
 }: BillDetailSheetProps) {
-  const members = useHouseholdStore((state) => state.members);
-  const expenses = useMoneyStore((state) => state.expenses);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const { data: expenses = [] } = useExpenses();
 
   if (!bill) return null;
 

@@ -295,6 +295,246 @@ export type Database = {
           },
         ];
       };
+      expenses: {
+        Row: {
+          id: string;
+          household_id: string;
+          description: string;
+          amount_cents: number;
+          category: string;
+          paid_by_household_member_id: string;
+          date: string;
+          split_mode: string;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never; // created only via create_expense()/mark_bill_paid()
+        Update: never; // edited only via update_expense()
+        Relationships: [
+          {
+            foreignKeyName: 'expenses_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'expenses_paid_by_household_member_id_household_id_fkey';
+            columns: ['paid_by_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      expense_shares: {
+        Row: {
+          id: string;
+          expense_id: string;
+          household_id: string;
+          household_member_id: string;
+          amount_cents: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'expense_shares_expense_id_household_id_fkey';
+            columns: ['expense_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'expenses';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'expense_shares_household_member_id_household_id_fkey';
+            columns: ['household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      settlements: {
+        Row: {
+          id: string;
+          household_id: string;
+          from_household_member_id: string;
+          to_household_member_id: string;
+          amount_cents: number;
+          date: string;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          household_id: string;
+          from_household_member_id: string;
+          to_household_member_id: string;
+          amount_cents: number;
+          date: string;
+          note?: string | null;
+        };
+        Update: never; // no editing -- delete and re-record
+        Relationships: [
+          {
+            foreignKeyName: 'settlements_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'settlements_from_household_member_id_household_id_fkey';
+            columns: ['from_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'settlements_to_household_member_id_household_id_fkey';
+            columns: ['to_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      recurring_bill_templates: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          amount_cents: number;
+          day_of_month: number;
+          responsible_household_member_id: string | null;
+          split_mode: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: never; // created only via create_bill()
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'recurring_bill_templates_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'recurring_bill_templates_responsible_household_member_id_household_id_fkey';
+            columns: ['responsible_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      recurring_bill_participants: {
+        Row: {
+          id: string;
+          template_id: string;
+          household_id: string;
+          household_member_id: string;
+          share_amount_cents: number | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'recurring_bill_participants_template_id_household_id_fkey';
+            columns: ['template_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'recurring_bill_templates';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'recurring_bill_participants_household_member_id_household_id_fkey';
+            columns: ['household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      bills: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          amount_cents: number;
+          due_date: string;
+          responsible_household_member_id: string | null;
+          split_mode: string;
+          recurrence: string;
+          recurring_bill_id: string | null;
+          status: string;
+          paid_at: string | null;
+          linked_expense_id: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never; // created only via create_bill()/generate_next_bill_occurrence()
+        Update: never; // edited only via update_bill()/mark_bill_paid()/delete_expense()
+        Relationships: [
+          {
+            foreignKeyName: 'bills_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bills_responsible_household_member_id_household_id_fkey';
+            columns: ['responsible_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'bills_recurring_bill_id_household_id_fkey';
+            columns: ['recurring_bill_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'recurring_bill_templates';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'bills_linked_expense_id_household_id_fkey';
+            columns: ['linked_expense_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'expenses';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      bill_shares: {
+        Row: {
+          id: string;
+          bill_id: string;
+          household_id: string;
+          household_member_id: string;
+          amount_cents: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'bill_shares_bill_id_household_id_fkey';
+            columns: ['bill_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'bills';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'bill_shares_household_member_id_household_id_fkey';
+            columns: ['household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -350,6 +590,77 @@ export type Database = {
       undo_chore_completion: {
         Args: { p_occurrence_id: string; p_generated_occurrence_id: string | null };
         Returns: undefined;
+      };
+      create_expense: {
+        Args: {
+          p_household_id: string;
+          p_description: string;
+          p_amount_cents: number;
+          p_category: string;
+          p_paid_by_member_id: string;
+          p_date: string;
+          p_split_mode: string;
+          p_shares: Json;
+          p_notes: string | null;
+        };
+        Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      update_expense: {
+        Args: {
+          p_expense_id: string;
+          p_description: string;
+          p_amount_cents: number;
+          p_category: string;
+          p_paid_by_member_id: string;
+          p_date: string;
+          p_split_mode: string;
+          p_shares: Json;
+          p_notes: string | null;
+        };
+        Returns: Database['public']['Tables']['expenses']['Row'];
+      };
+      delete_expense: {
+        Args: { p_expense_id: string };
+        Returns: undefined;
+      };
+      create_bill: {
+        Args: {
+          p_household_id: string;
+          p_name: string;
+          p_amount_cents: number;
+          p_due_date: string;
+          p_responsible_member_id: string | null;
+          p_split_mode: string;
+          p_shares: Json;
+          p_recurrence: string;
+          p_notes: string | null;
+        };
+        Returns: Database['public']['Tables']['bills']['Row'];
+      };
+      update_bill: {
+        Args: {
+          p_bill_id: string;
+          p_name: string;
+          p_amount_cents: number;
+          p_due_date: string;
+          p_responsible_member_id: string | null;
+          p_split_mode: string;
+          p_shares: Json;
+          p_notes: string | null;
+        };
+        Returns: Database['public']['Tables']['bills']['Row'];
+      };
+      delete_bill: {
+        Args: { p_bill_id: string };
+        Returns: undefined;
+      };
+      mark_bill_paid: {
+        Args: { p_bill_id: string; p_paid_by_member_id: string; p_payment_date: string | null };
+        Returns: Database['public']['Tables']['expenses']['Row'] | null;
+      };
+      generate_next_bill_occurrence: {
+        Args: { p_recurring_bill_id: string };
+        Returns: Database['public']['Tables']['bills']['Row'];
       };
     };
     Enums: Record<string, never>;

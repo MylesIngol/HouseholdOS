@@ -5,11 +5,11 @@ import { ThemedText } from '@/components/themed-text';
 import { FullScreenForm } from '@/components/ui/full-screen-form';
 import { PillSelector } from '@/components/ui/pill-selector';
 import { Radii, Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { isSplitReadyToSave, SplitEditor } from '@/features/money/components/split-editor';
 import { getRecurrenceLabel } from '@/features/money/display';
 import { centsToDollarsInput, dollarsToCents, resolveShares } from '@/features/money/money-math';
-import { useMoneyStore } from '@/features/money/store';
+import { useAddBill, useDeleteBill, useUpdateBill } from '@/features/money/queries';
 import type { Bill, BillRecurrence, SplitMode } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -34,10 +34,11 @@ function todayIso(): string {
 /** Fast "add bill" flow: name, amount, and due date are the minimum. Also the edit sheet for an upcoming bill when `bill` is provided. */
 export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
-  const addBill = useMoneyStore((state) => state.addBill);
-  const updateBill = useMoneyStore((state) => state.updateBill);
-  const deleteBill = useMoneyStore((state) => state.deleteBill);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const addBill = useAddBill();
+  const updateBill = useUpdateBill();
+  const deleteBill = useDeleteBill();
 
   const isEditMode = !!bill;
 
@@ -98,18 +99,22 @@ export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
       responsibleMemberId === NO_RESPONSIBLE_MEMBER ? undefined : responsibleMemberId;
 
     if (isEditMode && bill) {
-      updateBill(bill.id, {
-        name: name.trim(),
-        amountCents,
-        dueDate,
-        responsibleMemberId: responsible,
-        participants: participantIds,
-        splitMode,
-        shares,
-        notes: notes.trim() || undefined,
+      updateBill.mutate({
+        id: bill.id,
+        input: {
+          name: name.trim(),
+          amountCents,
+          dueDate,
+          responsibleMemberId: responsible,
+          participants: participantIds,
+          splitMode,
+          shares,
+          recurrence,
+          notes: notes.trim() || undefined,
+        },
       });
     } else {
-      addBill({
+      addBill.mutate({
         name: name.trim(),
         amountCents,
         dueDate,
@@ -126,7 +131,7 @@ export function BillSheet({ visible, onClose, bill }: BillSheetProps) {
 
   function handleDelete() {
     if (!bill) return;
-    deleteBill(bill.id);
+    deleteBill.mutate(bill.id);
     onClose();
   }
 

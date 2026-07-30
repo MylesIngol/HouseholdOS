@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Row } from '@/components/ui/row';
 import { Spacing } from '@/constants/theme';
-import { useHouseholdStore } from '@/features/household/store';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { formatCentsAsCurrency, formatDueDateLabel } from '@/features/money/display';
-import { useMoneyStore } from '@/features/money/store';
+import { useMarkBillPaid } from '@/features/money/queries';
 import type { Bill } from '@/features/money/types';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -18,14 +18,15 @@ type BillRowProps = {
 /** An upcoming bill with a one-tap "Mark paid" — the only place a bill's debt gets created, guarded so tapping it twice can't duplicate anything. */
 export function BillRow({ bill, onPress }: BillRowProps) {
   const theme = useTheme();
-  const members = useHouseholdStore((state) => state.members);
-  const markBillPaid = useMoneyStore((state) => state.markBillPaid);
+  const { data: household } = useMyHousehold();
+  const { data: members = [] } = useHouseholdMembers(household?.id);
+  const markBillPaid = useMarkBillPaid();
   const currentUser = members.find((member) => member.isCurrentUser);
 
   function handleMarkPaid() {
     const paidByMemberId = bill.responsibleMemberId ?? currentUser?.id;
     if (!paidByMemberId) return;
-    markBillPaid(bill.id, paidByMemberId);
+    markBillPaid.mutate({ billId: bill.id, paidByMemberId });
   }
 
   return (
