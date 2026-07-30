@@ -7,6 +7,7 @@ import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/features/auth/auth-provider';
+import { useMyHousehold } from '@/features/household/queries';
 import { queryClient } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
@@ -26,30 +27,35 @@ export default function RootLayout() {
 }
 
 /**
- * Gates the three top-level route groups on session state via Stack.Protected
- * rather than manual router.replace() redirects — declarative, and it's what
- * avoids a flash of the wrong screen while auth state is still resolving
- * (the splash screen stays up the entire time `isLoading` is true).
- *
- * NOTE: this checkpoint only distinguishes signed-out vs signed-in. Once
- * household membership exists (checkpoint C), a signed-in-but-no-household
- * case is inserted as a third branch to an (onboarding) group.
+ * Gates the three top-level route groups on session + household state via
+ * Stack.Protected rather than manual router.replace() redirects —
+ * declarative, and it's what avoids a flash of the wrong screen while state
+ * is still resolving (the splash screen stays up until BOTH the session
+ * check and, once signed in, the first household lookup have resolved).
  */
 function RootNavigator() {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
+  const { data: household, isLoading: householdLoading } = useMyHousehold();
+
+  // Only wait on the household query once there's a session to look one up
+  // for — an unauthenticated user should never be blocked on it.
+  const ready = !authLoading && (!session || !householdLoading);
 
   useEffect(() => {
-    if (!isLoading) SplashScreen.hideAsync();
-  }, [isLoading]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (isLoading) return null;
+  if (!ready) return null;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
-      <Stack.Protected guard={!!session}>
+      <Stack.Protected guard={!!session && !household}>
+        <Stack.Screen name="(onboarding)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!!session && !!household}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
     </Stack>

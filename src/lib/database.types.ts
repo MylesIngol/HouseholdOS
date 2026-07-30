@@ -1,10 +1,12 @@
 // -----------------------------------------------------------------------------
 // Hand-authored to match supabase/migrations/*.sql exactly, in the same shape
-// the Supabase CLI's `supabase gen types typescript` produces. Once a real
-// project is linked, run `npm run db:types` to regenerate this file from the
-// live schema — at that point this file becomes generated output and should
-// not be hand-edited. Grows one section per checkpoint (D adds Kitchen, E
-// adds Tasks, F adds Money).
+// the Supabase CLI's `supabase gen types typescript` produces (including the
+// Relationships arrays postgrest-js needs to type embedded/joined selects
+// like `.select('households(*)')`). Once a real project is linked, run
+// `npm run db:types` to regenerate this file from the live schema — at that
+// point this file becomes generated output and should not be hand-edited.
+// Grows one section per checkpoint (D adds Kitchen, E adds Tasks, F adds
+// Money).
 // -----------------------------------------------------------------------------
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -24,6 +26,7 @@ export type Database = {
           display_name?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       households: {
         Row: {
@@ -38,6 +41,15 @@ export type Database = {
           name?: string;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'households_created_by_fkey';
+            columns: ['created_by'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       household_members: {
         Row: {
@@ -49,6 +61,22 @@ export type Database = {
         };
         Insert: never; // created only via create_household()/join_household_with_code()
         Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'household_members_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'household_members_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: true;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       household_invites: {
         Row: {
@@ -66,8 +94,18 @@ export type Database = {
         Update: {
           revoked_at?: string | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'household_invites_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
+    Views: Record<string, never>;
     Functions: {
       create_household: {
         Args: { p_name: string };
@@ -82,5 +120,7 @@ export type Database = {
         Returns: Database['public']['Tables']['household_invites']['Row'];
       };
     };
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 };

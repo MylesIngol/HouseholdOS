@@ -12,10 +12,10 @@ import type { HouseholdMember } from '@/features/household/types';
 import type { Expense, Settlement } from './types.ts';
 
 const members: HouseholdMember[] = [
-  { id: 'you', name: 'You', isCurrentUser: true },
-  { id: 'bella', name: 'Bella', isCurrentUser: false },
-  { id: 'karyn', name: 'Karyn', isCurrentUser: false },
-  { id: 'nat', name: 'Nat', isCurrentUser: false },
+  { id: 'you', userId: 'you', name: 'You', isCurrentUser: true },
+  { id: 'bella', userId: 'bella', name: 'Bella', isCurrentUser: false },
+  { id: 'karyn', userId: 'karyn', name: 'Karyn', isCurrentUser: false },
+  { id: 'nat', userId: 'nat', name: 'Nat', isCurrentUser: false },
 ];
 
 let nextId = 1;

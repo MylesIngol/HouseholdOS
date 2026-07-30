@@ -7,8 +7,8 @@ import type { HouseholdMember } from './types';
 // `isCurrentUser`) and was used across more of the app.
 
 export const householdMembers: HouseholdMember[] = [
-  { id: 'you', name: 'You', isCurrentUser: true },
-  { id: 'bella', name: 'Bella', initials: 'B', isCurrentUser: false },
-  { id: 'karyn', name: 'Karyn', initials: 'K', isCurrentUser: false },
-  { id: 'nat', name: 'Nat', initials: 'N', isCurrentUser: false },
+  { id: 'you', userId: 'you', name: 'You', isCurrentUser: true },
+  { id: 'bella', userId: 'bella', name: 'Bella', initials: 'B', isCurrentUser: false },
+  { id: 'karyn', userId: 'karyn', name: 'Karyn', initials: 'K', isCurrentUser: false },
+  { id: 'nat', userId: 'nat', name: 'Nat', initials: 'N', isCurrentUser: false },
 ];
