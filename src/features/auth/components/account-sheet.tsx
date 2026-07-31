@@ -26,6 +26,26 @@ type AccountSheetProps = {
   onClose: () => void;
 };
 
+// Duck-typed rather than `instanceof Error` — Supabase's PostgrestError
+// class extends Error in source, but subclassing a built-in can lose its
+// prototype chain depending on how the published package was compiled/
+// bundled, which made `instanceof Error` unreliable in practice here.
+// Reading `.message` off anything object-shaped is what onboarding's
+// mapAuthError (src/features/auth/errors.ts) already does, for the same
+// reason.
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    (error as { message: string }).message
+  ) {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
 /**
  * Reachable from a small header affordance on Home rather than a new tab —
  * this app's navigation is 5 tabs plus modal-style full-screen forms, and an
@@ -53,9 +73,7 @@ export function AccountSheet({ visible, onClose }: AccountSheetProps) {
     try {
       await createInvite.mutateAsync();
     } catch (submitError) {
-      setInviteError(
-        submitError instanceof Error ? submitError.message : 'Could not create an invite code.',
-      );
+      setInviteError(getErrorMessage(submitError, 'Could not create an invite code.'));
     }
   }
 
@@ -66,7 +84,7 @@ export function AccountSheet({ visible, onClose }: AccountSheetProps) {
       await revokeInvite.mutateAsync(invite.id);
     } catch (submitError) {
       setInviteError(
-        submitError instanceof Error ? submitError.message : 'Could not revoke the invite code.',
+        getErrorMessage(submitError, 'Could not revoke the invite code.'),
       );
     }
   }
