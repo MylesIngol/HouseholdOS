@@ -8,12 +8,17 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/features/auth/auth-provider';
 import { useMyHousehold } from '@/features/household/queries';
-import { queryClient } from '@/lib/query-client';
+import { queryClient, startFocusManagerSync } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    startFocusManagerSync();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
