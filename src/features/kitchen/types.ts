@@ -63,6 +63,8 @@ export type InventoryItem = {
   /** ISO date string, bumped on every edit — also used to sort "recently out". */
   updatedAt: string;
   notes?: string;
+  /** Present only for items added via barcode scan (or, later, receipt import). */
+  barcode?: string;
 };
 
 /** Fields a user (or, later, a scan) supplies to create an item; everything else gets defaults. */
@@ -77,6 +79,7 @@ export type NewItemInput = {
   ownership?: Ownership;
   ownerId?: string;
   notes?: string;
+  barcode?: string;
 };
 
 // -----------------------------------------------------------------------------

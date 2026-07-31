@@ -22,5 +22,15 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  // Edge Functions run on Deno, not Node/React Native — they use `npm:`
+  // specifiers and Deno globals (Deno.serve, Deno.env) that don't resolve
+  // under this project's Node-oriented module resolution, and never will:
+  // this is the same split the standard Supabase project template uses
+  // (a separate Deno-aware toolchain governs supabase/functions/**, this
+  // tsconfig governs the app). Excluding here avoids false type errors on
+  // code this compiler was never meant to check.
+  "exclude": [
+    "supabase/functions/**"
   ]
 }

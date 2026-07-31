@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
+import { BarcodeConfirmSheet } from '@/features/scan/components/barcode-confirm-sheet';
 import { BarcodeScannerSheet } from '@/features/scan/components/barcode-scanner-sheet';
 import { ReceiptCaptureSheet } from '@/features/scan/components/receipt-capture-sheet';
 import { useTheme } from '@/hooks/use-theme';
@@ -13,21 +14,25 @@ import { useTheme } from '@/hooks/use-theme';
 type ActiveSheet = 'none' | 'barcode' | 'receipt';
 
 // -----------------------------------------------------------------------------
-// Checkpoint A scope: camera plumbing for both flows exists and works —
-// scanning a barcode or capturing+retaking a receipt photo. Neither flow
-// does anything with its result yet beyond a plain confirmation here;
-// barcode lookup (checkpoint B) and receipt processing (checkpoint E) are
-// separate, not-yet-built steps that will replace these placeholders.
+// Checkpoint B scope: a scanned barcode now goes through the real
+// lookup-barcode Edge Function (cache -> Open Food Facts -> UPCitemdb ->
+// unknown) and lands in a compact add-to-Kitchen confirmation sheet.
+// Receipt capture (checkpoint D) still just confirms a photo was taken —
+// processing that photo is checkpoint E's Edge Function, not yet built.
 // -----------------------------------------------------------------------------
 
 export function ScanScreen() {
   const theme = useTheme();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>('none');
+  const [scannedBarcode, setScannedBarcode] = useState<string | undefined>(undefined);
+  const [confirmSheetVisible, setConfirmSheetVisible] = useState(false);
   const [lastResult, setLastResult] = useState<string | undefined>(undefined);
 
   function handleBarcodeScanned(barcode: string) {
     setActiveSheet('none');
-    setLastResult(`Scanned barcode ${barcode} — lookup isn't built yet.`);
+    setLastResult(undefined);
+    setScannedBarcode(barcode);
+    setConfirmSheetVisible(true);
   }
 
   function handleReceiptPhoto(_uri: string) {
@@ -74,6 +79,11 @@ export function ScanScreen() {
         visible={activeSheet === 'receipt'}
         onClose={() => setActiveSheet('none')}
         onUsePhoto={handleReceiptPhoto}
+      />
+      <BarcodeConfirmSheet
+        visible={confirmSheetVisible}
+        barcode={scannedBarcode}
+        onClose={() => setConfirmSheetVisible(false)}
       />
     </Screen>
   );

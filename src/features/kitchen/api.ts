@@ -39,6 +39,7 @@ function mapInventoryItem(row: InventoryRow): InventoryItem {
     addedAt: row.added_at,
     updatedAt: row.updated_at,
     notes: row.notes ?? undefined,
+    barcode: row.barcode ?? undefined,
   };
 }
 
@@ -94,6 +95,7 @@ export async function createInventoryItem(
       owner_household_member_id:
         input.ownership === 'personal' ? (input.ownerId ?? null) : null,
       notes: input.notes ?? null,
+      barcode: input.barcode ?? null,
     })
     .select()
     .single();

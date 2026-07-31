@@ -119,6 +119,7 @@ export type Database = {
           ownership: string;
           owner_household_member_id: string | null;
           notes: string | null;
+          barcode: string | null;
           added_at: string;
           updated_at: string;
         };
@@ -135,6 +136,7 @@ export type Database = {
           ownership?: string;
           owner_household_member_id?: string | null;
           notes?: string | null;
+          barcode?: string | null;
         };
         Update: {
           name?: string;
@@ -148,6 +150,7 @@ export type Database = {
           ownership?: string;
           owner_household_member_id?: string | null;
           notes?: string | null;
+          barcode?: string | null;
         };
         Relationships: [
           {
@@ -199,6 +202,34 @@ export type Database = {
             referencedColumns: ['id', 'household_id'];
           },
         ];
+      };
+      products: {
+        Row: {
+          barcode: string;
+          name: string;
+          brand: string | null;
+          category: string | null;
+          image_url: string | null;
+          source: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          barcode: string;
+          name: string;
+          brand?: string | null;
+          category?: string | null;
+          image_url?: string | null;
+          source: string;
+        };
+        Update: {
+          name?: string;
+          brand?: string | null;
+          category?: string | null;
+          image_url?: string | null;
+          source?: string;
+        };
+        Relationships: [];
       };
       chore_templates: {
         Row: {
