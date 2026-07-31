@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -40,10 +41,34 @@ export function AccountSheet({ visible, onClose }: AccountSheetProps) {
   const { data: invite } = useHouseholdInvite(household?.id);
   const createInvite = useCreateHouseholdInvite(household?.id);
   const revokeInvite = useRevokeHouseholdInvite(household?.id);
+  const [inviteError, setInviteError] = useState<string | undefined>(undefined);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     onClose();
+  }
+
+  async function handleCreateInvite() {
+    setInviteError(undefined);
+    try {
+      await createInvite.mutateAsync();
+    } catch (submitError) {
+      setInviteError(
+        submitError instanceof Error ? submitError.message : 'Could not create an invite code.',
+      );
+    }
+  }
+
+  async function handleRevokeInvite() {
+    if (!invite) return;
+    setInviteError(undefined);
+    try {
+      await revokeInvite.mutateAsync(invite.id);
+    } catch (submitError) {
+      setInviteError(
+        submitError instanceof Error ? submitError.message : 'Could not revoke the invite code.',
+      );
+    }
   }
 
   async function handleShareInvite() {
@@ -92,9 +117,7 @@ export function AccountSheet({ visible, onClose }: AccountSheetProps) {
               {isOwner && (
                 <PrimaryButton
                   label={revokeInvite.isPending ? 'Revoking…' : 'Revoke this code'}
-                  onPress={
-                    revokeInvite.isPending ? undefined : () => revokeInvite.mutate(invite.id)
-                  }
+                  onPress={revokeInvite.isPending ? undefined : handleRevokeInvite}
                   style={{ backgroundColor: theme.backgroundElement }}
                 />
               )}
@@ -102,11 +125,16 @@ export function AccountSheet({ visible, onClose }: AccountSheetProps) {
           ) : isOwner ? (
             <PrimaryButton
               label={createInvite.isPending ? 'Creating…' : 'Create invite code'}
-              onPress={createInvite.isPending ? undefined : () => createInvite.mutate()}
+              onPress={createInvite.isPending ? undefined : handleCreateInvite}
             />
           ) : (
             <ThemedText type="small" themeColor="textSecondary">
               Only the household owner can create an invite code right now.
+            </ThemedText>
+          )}
+          {inviteError && (
+            <ThemedText type="small" style={{ color: theme.danger }}>
+              {inviteError}
             </ThemedText>
           )}
         </View>
