@@ -1,0 +1,22 @@
+-- ============================================================================
+-- Fix: `authenticated` was never granted USAGE on schema `private`.
+--
+-- Checkpoint A created the `private` schema (20260730000001) to hold RLS
+-- helper functions and SECURITY DEFINER internals, but never granted
+-- `authenticated` USAGE on the schema itself — only EXECUTE on the
+-- individual functions. On a real Supabase project this went unnoticed
+-- because most `private.*` calls happen inside RLS USING/WITH CHECK
+-- clauses on other tables, which apparently resolve fine without it; the
+-- gap only surfaces when an authenticated-role client calls a
+-- `SECURITY INVOKER` function (create_household_invite) whose body then
+-- calls a `private.*` helper directly — that nested call fails with
+-- "permission denied for schema private", since it's evaluated at the
+-- caller's own privilege level, not the callee's.
+--
+-- This was caught during live testing against a real Supabase project,
+-- and reproduced in the local embedded-postgres harness used throughout
+-- this milestone (whose own auth_shim.sql already granted this — masking
+-- the gap in every prior automated test run).
+-- ============================================================================
+
+grant usage on schema private to authenticated;
