@@ -231,6 +231,88 @@ export type Database = {
         };
         Relationships: [];
       };
+      household_product_memory: {
+        Row: {
+          id: string;
+          household_id: string;
+          product_key: string;
+          barcode: string | null;
+          preferred_name: string;
+          category: string | null;
+          storage_location: string | null;
+          default_ownership: string;
+          default_owner_household_member_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          household_id: string;
+          product_key: string;
+          barcode?: string | null;
+          preferred_name: string;
+          category?: string | null;
+          storage_location?: string | null;
+          default_ownership?: string;
+          default_owner_household_member_id?: string | null;
+        };
+        Update: {
+          product_key?: string;
+          barcode?: string | null;
+          preferred_name?: string;
+          category?: string | null;
+          storage_location?: string | null;
+          default_ownership?: string;
+          default_owner_household_member_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'household_product_memory_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'household_product_memory_default_owner_household_member_i_fkey';
+            columns: ['default_owner_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
+      household_product_memory_assignees: {
+        Row: {
+          id: string;
+          memory_id: string;
+          household_id: string;
+          household_member_id: string;
+        };
+        Insert: {
+          memory_id: string;
+          household_id: string;
+          household_member_id: string;
+        };
+        Update: {
+          household_member_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'household_product_memory_assignees_memory_id_household_i_fkey';
+            columns: ['memory_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_product_memory';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'household_product_memory_assignees_household_member_id_ho_fkey';
+            columns: ['household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
       chore_templates: {
         Row: {
           id: string;
