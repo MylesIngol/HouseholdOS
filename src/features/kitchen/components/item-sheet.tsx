@@ -29,6 +29,22 @@ type ItemSheetProps = {
   item?: InventoryItem;
 };
 
+// Duck-typed the same way as auth/components/account-sheet.tsx's local
+// helper — `error instanceof Error` isn't reliable for PostgrestError,
+// which has a `.message` string but isn't an Error instance.
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    (error as { message: string }).message
+  ) {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
 const LOCATION_OPTIONS: { value: StorageLocation; label: string }[] = [
   { value: 'fridge', label: 'Fridge' },
   { value: 'freezer', label: 'Freezer' },
@@ -81,6 +97,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
   const [notes, setNotes] = useState('');
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!visible) return;
@@ -96,6 +113,7 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
     setNotes(item?.notes ?? '');
     setDetailsExpanded(false);
     setDeleteConfirmOpen(false);
+    setSaveError(undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, item?.id]);
 
@@ -150,17 +168,36 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
     onClose();
   }
 
-  const canSave = name.trim().length > 0 && !!location;
+  // A personal item with no owner picked would otherwise reach Supabase and
+  // fail the DB's own check constraint — validating it here means Save is
+  // simply disabled instead of firing a doomed request.
+  const canSave =
+    name.trim().length > 0 && !!location && (ownership !== 'personal' || !!ownerId);
+  const isSaving = isEditMode ? updateItemMutation.isPending : addItemMutation.isPending;
 
-  function handleSave() {
+  async function handleSave() {
     if (!location) return;
     const trimmedName = name.trim();
     const trimmedNotes = notes.trim();
+    setSaveError(undefined);
 
-    if (isEditMode && item) {
-      updateItemMutation.mutate({
-        id: item.id,
-        patch: {
+    try {
+      if (isEditMode && item) {
+        await updateItemMutation.mutateAsync({
+          id: item.id,
+          patch: {
+            name: trimmedName,
+            location,
+            status,
+            quantity,
+            expiration,
+            ownership,
+            ownerId: ownership === 'personal' ? ownerId : undefined,
+            notes: trimmedNotes || undefined,
+          },
+        });
+      } else {
+        await addItemMutation.mutateAsync({
           name: trimmedName,
           location,
           status,
@@ -169,21 +206,18 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
           ownership,
           ownerId: ownership === 'personal' ? ownerId : undefined,
           notes: trimmedNotes || undefined,
-        },
-      });
-    } else {
-      addItemMutation.mutate({
-        name: trimmedName,
-        location,
-        status,
-        quantity,
-        expiration,
-        ownership,
-        ownerId: ownership === 'personal' ? ownerId : undefined,
-        notes: trimmedNotes || undefined,
-      });
+        });
+      }
+      // Only close on a confirmed success — a failed save leaves the sheet
+      // open with the entered data intact and an error shown, rather than
+      // silently discarding what the user typed.
+      onClose();
+    } catch (error) {
+      if (__DEV__) console.error('[kitchen] item save failed', error);
+      setSaveError(
+        getErrorMessage(error, isEditMode ? 'Could not save this item.' : 'Could not add this item.'),
+      );
     }
-    onClose();
   }
 
   const showDetails = isEditMode || detailsExpanded;
@@ -195,8 +229,14 @@ export function ItemSheet({ visible, onClose, item }: ItemSheetProps) {
       title={isEditMode ? 'Edit Item' : 'Add Item'}
       onSave={canSave ? handleSave : undefined}
       saveLabel={isEditMode ? 'Save' : 'Add'}
-      saveDisabled={!canSave}
+      saveDisabled={!canSave || isSaving}
     >
+      {saveError && (
+        <ThemedText type="small" style={{ color: theme.danger }}>
+          {saveError}
+        </ThemedText>
+      )}
+
       <View style={styles.field}>
         <TextInput
           value={name}

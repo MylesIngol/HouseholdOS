@@ -79,26 +79,31 @@ export async function createInventoryItem(
   input: NewItemInput,
 ): Promise<InventoryItem> {
   const hasQuantity = input.quantity !== undefined;
-  const { data, error } = await supabase
-    .from('inventory_items')
-    .insert({
-      household_id: householdId,
-      name: input.name.trim(),
-      category: input.category ?? 'other',
-      location: input.location,
-      status: input.status ?? 'in_stock',
-      quantity: input.quantity ?? null,
-      unit: hasQuantity ? (input.unit ?? 'count') : null,
-      expiration_date: input.expiration?.date ?? null,
-      expiration_confidence: input.expiration?.confidence ?? null,
-      ownership: input.ownership ?? 'shared',
-      owner_household_member_id:
-        input.ownership === 'personal' ? (input.ownerId ?? null) : null,
-      notes: input.notes ?? null,
-      barcode: input.barcode ?? null,
-    })
-    .select()
-    .single();
+
+  // `barcode` is only ever a real value when this insert came from the scan
+  // flow (checkpoint B) — the key is omitted entirely (not sent as an
+  // explicit null) for a plain manual Add Item. This matters beyond style:
+  // a household whose Supabase project hasn't yet run the migration that
+  // adds the `barcode` column would otherwise get "column barcode does not
+  // exist" on every single insert, including ones that have nothing to do
+  // with scanning. Confirmed empirically against the actual migration.
+  const payload: Database['public']['Tables']['inventory_items']['Insert'] = {
+    household_id: householdId,
+    name: input.name.trim(),
+    category: input.category ?? 'other',
+    location: input.location,
+    status: input.status ?? 'in_stock',
+    quantity: input.quantity ?? null,
+    unit: hasQuantity ? (input.unit ?? 'count') : null,
+    expiration_date: input.expiration?.date ?? null,
+    expiration_confidence: input.expiration?.confidence ?? null,
+    ownership: input.ownership ?? 'shared',
+    owner_household_member_id: input.ownership === 'personal' ? (input.ownerId ?? null) : null,
+    notes: input.notes ?? null,
+  };
+  if (input.barcode) payload.barcode = input.barcode;
+
+  const { data, error } = await supabase.from('inventory_items').insert(payload).select().single();
 
   if (error) throw error;
   return mapInventoryItem(data);
