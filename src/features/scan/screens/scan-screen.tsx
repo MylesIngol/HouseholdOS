@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { BarcodeConfirmSheet } from '@/features/scan/components/barcode-confirm-sheet';
 import { BarcodeScannerSheet } from '@/features/scan/components/barcode-scanner-sheet';
 import { ReceiptCaptureSheet } from '@/features/scan/components/receipt-capture-sheet';
+import type { CapturedReceiptImage } from '@/features/scan/receipt-image';
 import { useTheme } from '@/hooks/use-theme';
 
 type ActiveSheet = 'none' | 'barcode' | 'receipt';
@@ -38,9 +39,13 @@ export function ScanScreen() {
     setConfirmSheetVisible(true);
   }
 
-  function handleReceiptPhoto(_uri: string) {
+  function handleReceiptPhoto(image: CapturedReceiptImage) {
     setActiveSheet('none');
-    setLastResult('Receipt photo captured — processing isn’t built yet.');
+    const approxKB = Math.round(image.byteSize / 1024);
+    // Checkpoint D scope: capture + compress only — the image is held here
+    // in local state, nothing is uploaded or sent to any Edge Function yet.
+    // Processing (checkpoint E) will replace this placeholder.
+    setLastResult(`Receipt photo ready (${approxKB}KB) — processing isn’t built yet.`);
   }
 
   return (

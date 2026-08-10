@@ -1,32 +1,45 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Linking, Modal, Pressable, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
-import { Radii, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { compressReceiptImage, type CapturedReceiptImage } from '@/features/scan/receipt-image';
 import { useTheme } from '@/hooks/use-theme';
 
 // -----------------------------------------------------------------------------
-// Capture + retake only, per checkpoint D's scope in the milestone 7 plan —
-// compression/resizing before upload and everything past "the user is happy
-// with this photo" belongs to later checkpoints. `onUsePhoto` currently just
-// hands back the raw picked-image URI.
+// Checkpoint D scope: capture, compress/resize client-side, retake, done —
+// nothing is sent anywhere yet. `onUsePhoto` hands back the already-
+// compressed image (uri + base64 + dimensions), ready for checkpoint E's
+// process-receipt Edge Function to consume directly. The preview shown here
+// is the COMPRESSED image, not the raw capture — what you see is what will
+// eventually be sent.
 // -----------------------------------------------------------------------------
 
 type ReceiptCaptureSheetProps = {
   visible: boolean;
   onClose: () => void;
-  onUsePhoto: (uri: string) => void;
+  onUsePhoto: (image: CapturedReceiptImage) => void;
 };
 
 export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCaptureSheetProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = ImagePicker.useCameraPermissions();
-  const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
+  const [photo, setPhoto] = useState<CapturedReceiptImage | undefined>(undefined);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [captureError, setCaptureError] = useState<string | undefined>(undefined);
   // Guards against launching the camera twice for one "visible" session (e.g.
   // React re-rendering the effect) — launchCameraAsync already shows its own
   // native UI, so a double-launch would stack two camera screens.
@@ -41,6 +54,7 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
       }
     }
     setPermissionDenied(false);
+    setCaptureError(undefined);
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
@@ -52,14 +66,33 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
       onClose();
       return;
     }
-    setPhotoUri(result.assets[0].uri);
+
+    const asset = result.assets[0];
+    setIsProcessing(true);
+    try {
+      const compressed = await compressReceiptImage(asset.uri, asset.width, asset.height);
+      if (__DEV__) {
+        console.log('[scan] receipt photo compressed', {
+          width: compressed.width,
+          height: compressed.height,
+          approxKB: Math.round(compressed.byteSize / 1024),
+        });
+      }
+      setPhoto(compressed);
+    } catch (error) {
+      if (__DEV__) console.error('[scan] receipt compression failed', error);
+      setCaptureError('Could not process that photo — try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   }
 
   useEffect(() => {
     if (visible && !hasLaunchedRef.current) {
       hasLaunchedRef.current = true;
-      setPhotoUri(undefined);
+      setPhoto(undefined);
       setPermissionDenied(false);
+      setCaptureError(undefined);
       openCamera();
     }
     if (!visible) {
@@ -69,20 +102,20 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
   }, [visible]);
 
   function handleClose() {
-    setPhotoUri(undefined);
+    setPhoto(undefined);
     onClose();
   }
 
   function handleRetake() {
-    setPhotoUri(undefined);
+    setPhoto(undefined);
     openCamera();
   }
 
   function handleUsePhoto() {
-    if (!photoUri) return;
-    const uri = photoUri;
-    setPhotoUri(undefined);
-    onUsePhoto(uri);
+    if (!photo) return;
+    const captured = photo;
+    setPhoto(undefined);
+    onUsePhoto(captured);
   }
 
   return (
@@ -100,9 +133,18 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
           </Pressable>
         </View>
 
-        {photoUri ? (
+        {isProcessing && (
+          <View style={styles.centerFill}>
+            <ActivityIndicator color={theme.accent} />
+            <ThemedText type="small" themeColor="muted">
+              Processing photo…
+            </ThemedText>
+          </View>
+        )}
+
+        {!isProcessing && photo && (
           <>
-            <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="contain" />
+            <Image source={{ uri: photo.uri }} style={styles.preview} resizeMode="contain" />
             <View style={[styles.previewActions, { paddingBottom: insets.bottom + Spacing.four }]}>
               <Pressable onPress={handleRetake} hitSlop={8} style={styles.retakeButton}>
                 <ThemedText type="linkPrimary">Retake</ThemedText>
@@ -110,20 +152,29 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
               <PrimaryButton label="Use Photo" onPress={handleUsePhoto} />
             </View>
           </>
-        ) : (
-          permissionDenied && (
-            <View style={styles.permissionFallback}>
-              <ThemedText type="default" style={styles.permissionText}>
-                {permission?.canAskAgain === false
-                  ? 'Camera access is off for HouseholdOS. Enable it in Settings to scan receipts.'
-                  : 'HouseholdOS needs camera access to scan receipts.'}
-              </ThemedText>
-              <PrimaryButton
-                label={permission?.canAskAgain === false ? 'Open Settings' : 'Allow Camera'}
-                onPress={permission?.canAskAgain === false ? () => Linking.openSettings() : openCamera}
-              />
-            </View>
-          )
+        )}
+
+        {!isProcessing && !photo && captureError && (
+          <View style={styles.permissionFallback}>
+            <ThemedText type="default" style={styles.permissionText}>
+              {captureError}
+            </ThemedText>
+            <PrimaryButton label="Try Again" onPress={openCamera} />
+          </View>
+        )}
+
+        {!isProcessing && !photo && !captureError && permissionDenied && (
+          <View style={styles.permissionFallback}>
+            <ThemedText type="default" style={styles.permissionText}>
+              {permission?.canAskAgain === false
+                ? 'Camera access is off for HouseholdOS. Enable it in Settings to scan receipts.'
+                : 'HouseholdOS needs camera access to scan receipts.'}
+            </ThemedText>
+            <PrimaryButton
+              label={permission?.canAskAgain === false ? 'Open Settings' : 'Allow Camera'}
+              onPress={permission?.canAskAgain === false ? () => Linking.openSettings() : openCamera}
+            />
+          </View>
         )}
       </View>
     </Modal>
@@ -150,6 +201,12 @@ const styles = StyleSheet.create({
   retakeButton: {
     alignSelf: 'center',
     paddingVertical: Spacing.two,
+  },
+  centerFill: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.three,
   },
   permissionFallback: {
     flex: 1,
