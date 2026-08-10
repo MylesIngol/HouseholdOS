@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Radii, Spacing } from '@/constants/theme';
+import { normalizeBarcode } from '@/features/scan/barcode';
 import { useTheme } from '@/hooks/use-theme';
 
 // -----------------------------------------------------------------------------
@@ -44,7 +45,11 @@ export function BarcodeScannerSheet({ visible, onClose, onScanned }: BarcodeScan
 
   function handleUseCode() {
     if (!scannedCode) return;
-    const code = scannedCode;
+    // Displayed above as the raw scanned digits (matches what's printed on
+    // the package) — normalized only here, at the handoff point, so every
+    // downstream consumer (lookup, cache, memory, the inventory item's own
+    // barcode field) works from one canonical value.
+    const code = normalizeBarcode(scannedCode);
     setScannedCode(undefined);
     onScanned(code);
   }

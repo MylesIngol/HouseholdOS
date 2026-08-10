@@ -1,3 +1,5 @@
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
+
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/lib/database.types';
 import type { Ownership, StorageLocation } from '@/features/kitchen/types';
@@ -25,8 +27,17 @@ type LookupBarcodeResponse = {
 /**
  * Resolves to `null` for a genuinely unknown barcode — not an error, the
  * caller should fall through to manual entry (plan section 18). Throws only
- * for a real invoke/network/auth failure, with a plain-language message
- * matching the `getErrorMessage`/`mapAuthError` convention used elsewhere.
+ * for a real invoke/network/auth failure.
+ *
+ * Deliberately does NOT collapse every failure into one generic "check your
+ * connection" message — `supabase.functions.invoke`'s `error` can mean three
+ * very different things, and conflating them was itself a bug: a
+ * `FunctionsHttpError` means the function ran and returned OUR OWN JSON body
+ * (e.g. "Not authenticated.", the products-cache read failure message, an
+ * expired session) — that body is read and surfaced directly. A
+ * `FunctionsFetchError`/`FunctionsRelayError` means the function couldn't be
+ * reached at all (not deployed, genuine network outage) — that's the only
+ * case that actually warrants a "check your connection" style message.
  */
 export async function lookupBarcode(barcode: string): Promise<ScannedProduct | null> {
   const { data, error } = await supabase.functions.invoke<LookupBarcodeResponse>(
@@ -35,7 +46,33 @@ export async function lookupBarcode(barcode: string): Promise<ScannedProduct | n
   );
 
   if (error) {
-    throw new Error('Could not look up that barcode — check your connection and try again.');
+    if (error instanceof FunctionsHttpError) {
+      let serverMessage: string | undefined;
+      let status: number | undefined;
+      try {
+        status = error.context?.status;
+        const responseBody = await error.context.json();
+        serverMessage = typeof responseBody?.error === 'string' ? responseBody.error : undefined;
+      } catch (parseError) {
+        if (__DEV__) console.error('[scan] could not parse lookup-barcode error body', parseError);
+      }
+      // TEMP DIAGNOSTIC (barcode workflow bug hunt) — remove once confirmed
+      // working against the live project.
+      if (__DEV__) console.error('[scan] lookup-barcode HTTP error', { status, serverMessage });
+
+      if (status === 401) {
+        throw new Error('Your session has expired — sign out and back in, then try scanning again.');
+      }
+      throw new Error(serverMessage ?? 'Could not look up that barcode.');
+    }
+    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      if (__DEV__) console.error('[scan] lookup-barcode unreachable', error);
+      throw new Error(
+        'Could not reach the barcode lookup service — check your connection and try again.',
+      );
+    }
+    if (__DEV__) console.error('[scan] lookup-barcode failed', error);
+    throw new Error('Could not look up that barcode.');
   }
   if (!data || data.error) {
     throw new Error(data?.error ?? 'Could not look up that barcode.');
@@ -86,7 +123,11 @@ export async function fetchProductMemoryByBarcode(
     .eq('barcode', barcode)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (__DEV__) console.error('[scan] household_product_memory read failed', error); // TEMP DIAGNOSTIC
+    throw error;
+  }
+  if (__DEV__) console.log('[scan] household memory', barcode, data ? 'hit' : 'miss'); // TEMP DIAGNOSTIC
   return data ? mapProductMemory(data) : null;
 }
 
@@ -125,5 +166,10 @@ export async function upsertProductMemory(
     { onConflict: 'household_id,product_key' },
   );
 
+  if (__DEV__) {
+    // TEMP DIAGNOSTIC (barcode workflow bug hunt) — remove once confirmed
+    // working against the live project.
+    console.log('[scan] upsertProductMemory', { householdId, input, error: error?.message });
+  }
   if (error) throw error;
 }

@@ -14,9 +14,12 @@ import { useTheme } from '@/hooks/use-theme';
 type ActiveSheet = 'none' | 'barcode' | 'receipt';
 
 // -----------------------------------------------------------------------------
-// Checkpoint B scope: a scanned barcode now goes through the real
-// lookup-barcode Edge Function (cache -> Open Food Facts -> UPCitemdb ->
-// unknown) and lands in a compact add-to-Kitchen confirmation sheet.
+// A scanned barcode is checked against this household's own memory first,
+// then (only on a miss) the lookup-barcode Edge Function's cache -> Open
+// Food Facts -> UPCitemdb -> unknown chain, landing in a compact
+// add-to-Kitchen confirmation sheet either way. `lastResult` here doubles
+// as the confirmation of a successful Add and the surfaced note for the
+// rare case where the item saved but "remember for next time" didn't.
 // Receipt capture (checkpoint D) still just confirms a photo was taken —
 // processing that photo is checkpoint E's Edge Function, not yet built.
 // -----------------------------------------------------------------------------
@@ -84,6 +87,7 @@ export function ScanScreen() {
         visible={confirmSheetVisible}
         barcode={scannedBarcode}
         onClose={() => setConfirmSheetVisible(false)}
+        onSaved={(note) => setLastResult(note ?? 'Added to Kitchen.')}
       />
     </Screen>
   );

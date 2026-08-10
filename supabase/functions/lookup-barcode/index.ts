@@ -14,11 +14,35 @@
 // `auth.getUser()` succeeds before doing any work — no household check is
 // needed here (unlike process-receipt, later), since `products` is
 // intentionally global, not household-scoped.
+//
+// KEY SOURCE: deliberately NOT `Deno.env.get('SUPABASE_ANON_KEY')`. Supabase
+// has a confirmed platform bug (github.com/supabase/supabase/issues/37648)
+// where that reserved env var keeps serving the legacy JWT-format key after
+// a project migrates to the new publishable/secret key system and disables
+// legacy keys — every DB call made with it then fails with "Legacy API keys
+// are disabled", which this function was swallowing into a bare 500. The
+// `apikey` header on the incoming request is always the exact key the
+// calling client is actually configured with (supabase-js sets it on every
+// request, including function invocations), so it can never be stale the
+// way the env var can — using it sidesteps the bug entirely rather than
+// working around a moving target.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 
 const BARCODE_PATTERN = /^[0-9]{8,14}$/;
+
+// Mirrors src/features/scan/barcode.ts on the client exactly — kept as a
+// separate copy because Edge Functions (Deno) and the app (Node/RN) aren't
+// bundled together, not because the logic is meant to differ. UPC-A (12
+// digits) and EAN-13 (13 digits, leading 0) encode the same product; without
+// this, the same physical barcode could scan as either depending on which
+// symbology the camera happened to decode, causing spurious cache/memory
+// misses.
+function normalizeBarcode(raw: string): string {
+  const trimmed = raw.trim();
+  return trimmed.length === 12 ? `0${trimmed}` : trimmed;
+}
 
 type CachedProduct = {
   barcode: string;
@@ -148,8 +172,10 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    // See the KEY SOURCE note above — the incoming request's own `apikey`
+    // header, not the env var, which can be stale.
+    const supabaseKey = req.headers.get('apikey') ?? Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
@@ -158,6 +184,9 @@ Deno.serve(async (req) => {
       error: userError,
     } = await supabase.auth.getUser();
     if (userError || !user) {
+      // TEMP DIAGNOSTIC (checkpoint C bug hunt) — remove once the barcode
+      // flow is confirmed working against the live project.
+      console.error('lookup-barcode auth failed', userError?.message);
       return jsonResponse({ error: 'Not authenticated.' }, 401);
     }
 
@@ -168,26 +197,43 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid request body.' }, 400);
     }
 
-    const barcode = typeof body.barcode === 'string' ? body.barcode.trim() : '';
+    const rawBarcode = typeof body.barcode === 'string' ? body.barcode : '';
+    const barcode = normalizeBarcode(rawBarcode);
     if (!BARCODE_PATTERN.test(barcode)) {
       return jsonResponse({ error: 'Invalid barcode.' }, 400);
     }
 
+    // TEMP DIAGNOSTIC
+    console.log('lookup-barcode request', { rawBarcode, normalizedBarcode: barcode, userId: user.id });
+
     // 1. Our own cache — universal across every household by design.
-    const { data: cached } = await supabase
+    const { data: cached, error: cacheError } = await supabase
       .from('products')
       .select('barcode, name, brand, category, image_url, source')
       .eq('barcode', barcode)
       .maybeSingle<CachedProduct>();
 
+    if (cacheError) {
+      // A cache READ failure (e.g. the exact "Legacy API keys are
+      // disabled" failure mode this function used to be vulnerable to, or
+      // the `products` table/migration missing) is a real, diagnosable
+      // problem — surface it distinctly instead of silently treating it as
+      // a cache miss and masking it behind a provider lookup.
+      console.error('lookup-barcode products cache read failed', cacheError);
+      return jsonResponse({ error: `Could not reach the product cache: ${cacheError.message}` }, 500);
+    }
+
     if (cached) {
+      console.log('lookup-barcode cache hit', barcode); // TEMP DIAGNOSTIC
       return jsonResponse({ product: cached });
     }
 
     // 2. Open Food Facts, then 3. UPCitemdb. Each provider swallows its own
     // failures (network error, bad response, not-found) and simply falls
     // through to the next — no raw provider error ever reaches the client.
-    const found = (await lookupOpenFoodFacts(barcode)) ?? (await lookupUpcItemDb(barcode));
+    const fromOff = await lookupOpenFoodFacts(barcode);
+    const found = fromOff ?? (await lookupUpcItemDb(barcode));
+    console.log('lookup-barcode provider result', { barcode, source: found?.source ?? 'none' }); // TEMP DIAGNOSTIC
 
     if (!found) {
       return jsonResponse({ product: null });
@@ -204,6 +250,10 @@ Deno.serve(async (req) => {
 
     return jsonResponse({ product: { barcode, ...found } });
   } catch (error) {
+    // Full detail goes to server logs only (`supabase functions logs
+    // lookup-barcode`) — an arbitrary caught exception could carry
+    // implementation detail that shouldn't reach the client, unlike the
+    // specific, bounded `cacheError` case above.
     console.error('lookup-barcode unhandled error', error);
     return jsonResponse({ error: 'Something went wrong looking up that barcode.' }, 500);
   }

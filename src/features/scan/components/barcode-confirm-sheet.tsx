@@ -16,7 +16,29 @@ type BarcodeConfirmSheetProps = {
   /** The just-scanned code. Looked up automatically as soon as the sheet opens. */
   barcode: string | undefined;
   onClose: () => void;
+  /**
+   * Fired after a fully successful Add (item created; `note` is set only in
+   * the soft partial-failure case — item created but the "remember for
+   * next time" write failed — never for a hard failure, which keeps the
+   * sheet open with an inline error instead of calling this at all).
+   */
+  onSaved?: (note?: string) => void;
 };
+
+// Duck-typed the same way as item-sheet.tsx's local helper — PostgrestError
+// isn't an Error instance, so `instanceof Error` isn't reliable.
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message: unknown }).message === 'string' &&
+    (error as { message: string }).message
+  ) {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
 
 const LOCATION_OPTIONS: { value: StorageLocation; label: string }[] = [
   { value: 'fridge', label: 'Fridge' },
@@ -55,7 +77,7 @@ const KNOWN_CATEGORIES = new Set<string>(CATEGORY_OPTIONS.map((option) => option
 // so the next scan of the same barcode needs zero re-entry.
 // -----------------------------------------------------------------------------
 
-export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfirmSheetProps) {
+export function BarcodeConfirmSheet({ visible, barcode, onClose, onSaved }: BarcodeConfirmSheetProps) {
   const theme = useTheme();
   const { data: household } = useMyHousehold();
   const { data: householdMembers = [] } = useHouseholdMembers(household?.id);
@@ -69,6 +91,7 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
   const [ownership, setOwnership] = useState<Ownership>('shared');
   const [ownerId, setOwnerId] = useState<string | undefined>(undefined);
   const [lookupError, setLookupError] = useState<string | undefined>(undefined);
+  const [saveError, setSaveError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!visible || !barcode || !household?.id) return;
@@ -78,11 +101,12 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
     setOwnership('shared');
     setOwnerId(undefined);
     setLookupError(undefined);
+    setSaveError(undefined);
 
     scanMutation.mutate(
       { householdId: household.id, barcode },
       {
-        onSuccess: ({ product, memory, lookupFailed }) => {
+        onSuccess: ({ product, memory, lookupFailed, memoryFailed }) => {
           // Global cache first (lower priority)...
           if (product) {
             setName(product.name);
@@ -91,7 +115,10 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
             }
           }
           // ...then this household's own memory overrides it (plan section 1:
-          // "prefer the household's previous choices").
+          // "prefer the household's previous choices"). Memory is checked
+          // BEFORE the Edge Function is ever called (useScanBarcode) — if
+          // memory hit, `product` above is always null and this is the only
+          // source of prefill.
           if (memory) {
             setName(memory.preferredName);
             if (memory.category && KNOWN_CATEGORIES.has(memory.category)) {
@@ -103,12 +130,14 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
           }
           if (lookupFailed) {
             setLookupError('Could not look up that barcode — check your connection and try again.');
+          } else if (memoryFailed) {
+            setLookupError(
+              "Could not check whether we've seen this barcode before, but you can still add it manually.",
+            );
           }
         },
         onError: (error) => {
-          setLookupError(
-            error instanceof Error ? error.message : 'Could not look up that barcode.',
-          );
+          setLookupError(getErrorMessage(error, 'Could not look up that barcode.'));
         },
       },
     );
@@ -120,38 +149,74 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
     if (next === 'shared') setOwnerId(undefined);
   }
 
-  const canSave = name.trim().length > 0 && !!location;
+  // Same guard as ItemSheet: a personal item with no owner picked would
+  // otherwise reach Supabase and fail the DB's own check constraint.
+  const canSave =
+    name.trim().length > 0 && !!location && (ownership !== 'personal' || !!ownerId);
+  const isSaving = addItemMutation.isPending || upsertMemoryMutation.isPending;
 
-  function handleSave() {
+  async function handleSave() {
     if (!location || !barcode) return;
     const trimmedName = name.trim();
     const resolvedOwnerId = ownership === 'personal' ? ownerId : undefined;
+    setSaveError(undefined);
 
-    addItemMutation.mutate({
+    const itemPayload = {
       name: trimmedName,
       category,
       location,
       ownership,
       ownerId: resolvedOwnerId,
       barcode,
-    });
+    };
+    // TEMP DIAGNOSTIC (barcode workflow bug hunt) — remove once confirmed
+    // working against the live project.
+    if (__DEV__) console.log('[scan] manual fallback submit payload', itemPayload);
 
-    if (household?.id) {
-      // Fire-and-forget: a failed "remember for next time" write shouldn't
-      // undo or block the item that was just successfully added.
-      upsertMemoryMutation.mutate({
-        householdId: household.id,
-        input: {
-          barcode,
-          preferredName: trimmedName,
-          category,
-          storageLocation: location,
-          defaultOwnership: ownership,
-          defaultOwnerId: resolvedOwnerId,
-        },
-      });
+    // Primary write: the Kitchen inventory item. This is the part that must
+    // succeed and must be visible if it fails — awaited, not fired and
+    // forgotten, and the sheet stays open with the real error on failure
+    // instead of closing regardless (the exact bug this replaces).
+    try {
+      const created = await addItemMutation.mutateAsync(itemPayload);
+      if (__DEV__) console.log('[scan] Kitchen insert succeeded', created.id);
+    } catch (error) {
+      if (__DEV__) console.error('[scan] Kitchen insert failed', error);
+      setSaveError(getErrorMessage(error, 'Could not add this item.'));
+      return;
     }
 
+    // Secondary write: remember this barcode for next time. The item is
+    // already safely in Kitchen at this point, so a failure here is
+    // deliberately non-blocking — but it is NOT silent: it's surfaced via
+    // `onSaved`'s note after this sheet closes (there's no error banner left
+    // to show it in once we're past the point of no return on the primary
+    // write). Recovery is simple and automatic: the next scan of this same
+    // barcode just won't find memory and will fall through to this same
+    // manual/prefill flow again, which re-attempts this same upsert.
+    let memoryNote: string | undefined;
+    if (household?.id) {
+      try {
+        await upsertMemoryMutation.mutateAsync({
+          householdId: household.id,
+          input: {
+            barcode,
+            preferredName: trimmedName,
+            category,
+            storageLocation: location,
+            defaultOwnership: ownership,
+            defaultOwnerId: resolvedOwnerId,
+          },
+        });
+        if (__DEV__) console.log('[scan] product memory upsert succeeded');
+      } catch (error) {
+        if (__DEV__) console.error('[scan] product memory upsert failed', error);
+        memoryNote =
+          "Added to Kitchen, but couldn't save it for next time — you'll need to re-enter it if you scan this barcode again.";
+      }
+    }
+
+    onSaved?.(memoryNote);
     onClose();
   }
 
@@ -167,8 +232,14 @@ export function BarcodeConfirmSheet({ visible, barcode, onClose }: BarcodeConfir
       title="Add Scanned Item"
       onSave={canSave ? handleSave : undefined}
       saveLabel="Add"
-      saveDisabled={!canSave}
+      saveDisabled={!canSave || isSaving}
     >
+      {saveError && (
+        <ThemedText type="small" style={{ color: theme.danger }}>
+          {saveError}
+        </ThemedText>
+      )}
+
       {isLookingUp && (
         <View style={styles.lookupRow}>
           <ActivityIndicator color={theme.accent} />
