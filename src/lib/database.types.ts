@@ -648,6 +648,52 @@ export type Database = {
           },
         ];
       };
+      receipt_imports: {
+        Row: {
+          id: string;
+          household_id: string;
+          uploaded_by_household_member_id: string;
+          status: string;
+          merchant_name: string | null;
+          purchase_date: string | null;
+          subtotal_cents: number | null;
+          tax_cents: number | null;
+          total_cents: number;
+          raw_model_response: Json;
+          linked_expense_id: string | null;
+          confirmed_at: string | null;
+          created_at: string;
+        };
+        // No client-facing INSERT/UPDATE policy at all — written exclusively
+        // by process-receipt (create) and confirm_receipt (checkpoint H,
+        // confirm) via service-role clients, each after its own independent
+        // membership check (plan section 7).
+        Insert: never;
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: 'receipt_imports_household_id_fkey';
+            columns: ['household_id'];
+            isOneToOne: false;
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'receipt_imports_uploaded_by_household_member_id_household__fkey';
+            columns: ['uploaded_by_household_member_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'household_members';
+            referencedColumns: ['id', 'household_id'];
+          },
+          {
+            foreignKeyName: 'receipt_imports_linked_expense_id_household_id_fkey';
+            columns: ['linked_expense_id', 'household_id'];
+            isOneToOne: false;
+            referencedRelation: 'expenses';
+            referencedColumns: ['id', 'household_id'];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

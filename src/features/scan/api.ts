@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { Database } from '@/lib/database.types';
 import type { Ownership, StorageLocation } from '@/features/kitchen/types';
 
+import type { Receipt } from './receipt-validator';
 import type { ProductMemory, ScannedProduct } from './types';
 
 // Thin wrapper over supabase.functions.invoke, same shape as every other
@@ -172,4 +173,71 @@ export async function upsertProductMemory(
     console.log('[scan] upsertProductMemory', { householdId, input, error: error?.message });
   }
   if (error) throw error;
+}
+
+// -----------------------------------------------------------------------------
+// process-receipt — checkpoint E. Deliberately minimal: this only proves the
+// Edge Function end to end (photo in, validated Receipt + receipt_imports.id
+// out). Per the explicit checkpoint E scope, the Receipt Review screen that
+// would actually DO something with this Receipt is checkpoint G, gated until
+// this has been confirmed working against a real photographed receipt.
+// -----------------------------------------------------------------------------
+
+type ProcessReceiptResponse = {
+  receiptImportId: string;
+  receipt: Receipt;
+  error?: string;
+};
+
+export type ProcessReceiptResult = {
+  receiptImportId: string;
+  receipt: Receipt;
+};
+
+/**
+ * Same error-shape discipline as lookupBarcode above: a `FunctionsHttpError`
+ * means the function ran and returned OUR OWN JSON body (auth failure,
+ * validation failure, abuse-guard rejection, etc.) — that message is
+ * surfaced directly rather than collapsed into one generic string. A
+ * `FunctionsFetchError`/`FunctionsRelayError` means the function couldn't be
+ * reached at all.
+ */
+export async function processReceipt(
+  householdId: string,
+  image: { base64: string; mimeType: string },
+): Promise<ProcessReceiptResult> {
+  const { data, error } = await supabase.functions.invoke<ProcessReceiptResponse>('process-receipt', {
+    body: { householdId, imageBase64: image.base64, mimeType: image.mimeType },
+  });
+
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      let serverMessage: string | undefined;
+      let status: number | undefined;
+      try {
+        status = error.context?.status;
+        const responseBody = await error.context.json();
+        serverMessage = typeof responseBody?.error === 'string' ? responseBody.error : undefined;
+      } catch (parseError) {
+        if (__DEV__) console.error('[scan] could not parse process-receipt error body', parseError);
+      }
+      if (__DEV__) console.error('[scan] process-receipt HTTP error', { status, serverMessage });
+
+      if (status === 401) {
+        throw new Error('Your session has expired — sign out and back in, then try again.');
+      }
+      throw new Error(serverMessage ?? 'Could not process that receipt.');
+    }
+    if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      if (__DEV__) console.error('[scan] process-receipt unreachable', error);
+      throw new Error('Could not reach the receipt-scanning service — check your connection and try again.');
+    }
+    if (__DEV__) console.error('[scan] process-receipt failed', error);
+    throw new Error('Could not process that receipt.');
+  }
+  if (!data || data.error) {
+    throw new Error(data?.error ?? 'Could not process that receipt.');
+  }
+
+  return { receiptImportId: data.receiptImportId, receipt: data.receipt };
 }

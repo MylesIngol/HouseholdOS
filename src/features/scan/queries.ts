@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import {
   fetchProductMemoryByBarcode,
   lookupBarcode,
+  processReceipt,
   upsertProductMemory,
   type ProductMemoryInput,
 } from './api';
@@ -84,5 +85,23 @@ export function useUpsertProductMemory() {
   return useMutation({
     mutationFn: ({ householdId, input }: { householdId: string; input: ProductMemoryInput }) =>
       upsertProductMemory(householdId, input),
+  });
+}
+
+/**
+ * Checkpoint E scope only: proves the process-receipt Edge Function end to
+ * end (photo -> validated Receipt + receipt_imports.id). Nothing downstream
+ * consumes the result yet — the Receipt Review screen (checkpoint G) is
+ * explicitly gated until this has processed one real photographed receipt.
+ */
+export function useProcessReceipt() {
+  return useMutation({
+    mutationFn: ({
+      householdId,
+      image,
+    }: {
+      householdId: string;
+      image: { base64: string; mimeType: string };
+    }) => processReceipt(householdId, image),
   });
 }

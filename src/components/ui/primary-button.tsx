@@ -10,18 +10,20 @@ type PrimaryButtonProps = {
   icon?: ReactNode;
   onPress?: () => void;
   style?: ViewStyle;
+  disabled?: boolean;
 };
 
 /** The one obvious primary action on a screen or section. Use sparingly. */
-export function PrimaryButton({ label, icon, onPress, style }: PrimaryButtonProps) {
+export function PrimaryButton({ label, icon, onPress, style, disabled }: PrimaryButtonProps) {
   const theme = useTheme();
 
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.button,
-        { backgroundColor: theme.accent, opacity: pressed ? 0.85 : 1 },
+        { backgroundColor: theme.accent, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
         style,
       ]}
     >
