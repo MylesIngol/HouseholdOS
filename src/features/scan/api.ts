@@ -194,6 +194,33 @@ export type ProcessReceiptResult = {
   receipt: Receipt;
 };
 
+// A Claude vision call plus everything around it is normally a few seconds,
+// but nothing guarantees the underlying fetch ever settles (a dropped
+// connection mid-request can hang indefinitely rather than erroring). Without
+// a ceiling here, the caller's "processing" state could get stuck forever
+// with no way out — this is what makes "capture/processing state resets
+// correctly after failure" and "must always be able to scan another receipt"
+// actually true even in that worst case, not just in the happy path. If the
+// underlying invoke eventually does resolve after this fires, its result is
+// simply ignored — harmless, since the caller has already moved on.
+const PROCESS_RECEIPT_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(timeoutMessage)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Same error-shape discipline as lookupBarcode above: a `FunctionsHttpError`
  * means the function ran and returned OUR OWN JSON body (auth failure,
@@ -206,9 +233,13 @@ export async function processReceipt(
   householdId: string,
   image: { base64: string; mimeType: string },
 ): Promise<ProcessReceiptResult> {
-  const { data, error } = await supabase.functions.invoke<ProcessReceiptResponse>('process-receipt', {
-    body: { householdId, imageBase64: image.base64, mimeType: image.mimeType },
-  });
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke<ProcessReceiptResponse>('process-receipt', {
+      body: { householdId, imageBase64: image.base64, mimeType: image.mimeType },
+    }),
+    PROCESS_RECEIPT_TIMEOUT_MS,
+    'This is taking too long — check your connection and try again.',
+  );
 
   if (error) {
     if (error instanceof FunctionsHttpError) {

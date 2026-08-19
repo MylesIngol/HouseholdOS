@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -18,12 +18,32 @@ import { compressReceiptImage, type CapturedReceiptImage } from '@/features/scan
 import { useTheme } from '@/hooks/use-theme';
 
 // -----------------------------------------------------------------------------
-// Checkpoint D scope: capture, compress/resize client-side, retake, done —
-// nothing is sent anywhere yet. `onUsePhoto` hands back the already-
-// compressed image (uri + base64 + dimensions), ready for checkpoint E's
-// process-receipt Edge Function to consume directly. The preview shown here
-// is the COMPRESSED image, not the raw capture — what you see is what will
-// eventually be sent.
+// Checkpoint D/E scope: capture, compress/resize client-side, retake, done —
+// `onUsePhoto` hands back the already-compressed image (uri + base64 +
+// dimensions), ready for the process-receipt Edge Function to consume
+// directly. The preview shown here is the COMPRESSED image, not the raw
+// capture — what you see is what will eventually be sent.
+//
+// TODO(native-document-scanner): this manual capture+preview+retake UI is
+// intentionally the long-term-temporary implementation. The approved
+// direction is to replace it with react-native-document-scanner-plugin
+// (VisionKit on iOS / ML Kit Document Scanner on Android — native edge
+// detection, auto-capture, auto-crop/deskew, built-in retake), which was
+// evaluated and installed once already but reverted because it requires
+// leaving Expo Go for a development build, and a paid Apple Developer
+// membership is a prerequisite for building to a real iPhone. Resume that
+// migration (see eas.json / the EAS project already linked) once this app
+// moves to a real development or TestFlight build. Until then, this
+// expo-image-picker-based flow is the real, supported implementation, not a
+// stopgap to work around carelessly.
+//
+// Camera launch is triggered from the Modal's `onShow` callback (fires once
+// the native modal has actually finished presenting), not from a
+// visible-prop-driven useEffect — launching the camera before the modal
+// transition settles was the likely cause of the "reopening the capture flow
+// appeared stuck" bug reported after live-device testing. `onShow` firing
+// exactly once per presentation is what makes this reliable without a
+// separate launched-guard ref.
 // -----------------------------------------------------------------------------
 
 type ReceiptCaptureSheetProps = {
@@ -40,10 +60,13 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [captureError, setCaptureError] = useState<string | undefined>(undefined);
-  // Guards against launching the camera twice for one "visible" session (e.g.
-  // React re-rendering the effect) — launchCameraAsync already shows its own
-  // native UI, so a double-launch would stack two camera screens.
-  const hasLaunchedRef = useRef(false);
+
+  function handleModalShow() {
+    setPhoto(undefined);
+    setPermissionDenied(false);
+    setCaptureError(undefined);
+    openCamera();
+  }
 
   async function openCamera() {
     if (!permission?.granted) {
@@ -87,20 +110,6 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
     }
   }
 
-  useEffect(() => {
-    if (visible && !hasLaunchedRef.current) {
-      hasLaunchedRef.current = true;
-      setPhoto(undefined);
-      setPermissionDenied(false);
-      setCaptureError(undefined);
-      openCamera();
-    }
-    if (!visible) {
-      hasLaunchedRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
-
   function handleClose() {
     setPhoto(undefined);
     onClose();
@@ -125,6 +134,7 @@ export function ReceiptCaptureSheet({ visible, onClose, onUsePhoto }: ReceiptCap
       presentationStyle="fullScreen"
       transparent={false}
       onRequestClose={handleClose}
+      onShow={handleModalShow}
     >
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={[styles.topBar, { paddingTop: insets.top + Spacing.two }]}>

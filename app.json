@@ -48,12 +48,6 @@
         {
           "cameraPermission": "HouseholdOS uses your camera to photograph receipts so you can add items faster."
         }
-      ],
-      [
-        "react-native-document-scanner-plugin",
-        {
-          "cameraPermission": "HouseholdOS uses your camera to scan barcodes and receipts so you can add items faster."
-        }
       ]
     ],
     "experiments": {
