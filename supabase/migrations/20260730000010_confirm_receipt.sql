@@ -39,6 +39,19 @@
 alter table public.receipt_imports
   add column discount_cents int check (discount_cents is null or discount_cents >= 0);
 
+-- Backfill: any receipt already inserted before this migration (checkpoints
+-- E/F/G's on-device testing) that DID have a parsed discount would otherwise
+-- read back as discount_cents = NULL -> confirm_receipt would treat it as a
+-- $0 discount and fail exact reconciliation against that receipt's own
+-- total. raw_model_response is always the VALIDATED Receipt (never
+-- Claude's raw untrusted output — see this table's original header note),
+-- so discountCents, when present, is already guaranteed a non-negative
+-- integer by receipt-validator.ts; no extra sanitizing needed here.
+update public.receipt_imports
+set discount_cents = (raw_model_response ->> 'discountCents')::int
+where discount_cents is null
+  and raw_model_response ? 'discountCents';
+
 -- receipt_imports already has linked_expense_id/confirmed_at (built ahead of
 -- their own writer in checkpoint E's migration) — only WHO confirmed it is
 -- new here, same composite-FK pattern as uploaded_by_household_member_id.
@@ -129,40 +142,49 @@ as $$
   ),
   sum_weights as (
     select coalesce(sum(weight_cents), 0) as total_weight from weights
-  ),
-  floored as (
-    select
-      w.member_id,
-      case when p_total_cents = 0 or sw.total_weight <= 0 then 0
-           else floor(p_total_cents::numeric * w.weight_cents / sw.total_weight)::int
-      end as base_cents,
-      case when p_total_cents = 0 or sw.total_weight <= 0 then 0::numeric
-           else (p_total_cents::numeric * w.weight_cents / sw.total_weight)
-                - floor(p_total_cents::numeric * w.weight_cents / sw.total_weight)
-      end as remainder
-    from weights w cross join sum_weights sw
-  ),
-  totals as (
-    select coalesce(sum(base_cents), 0) as allocated from floored
-  ),
-  ranked as (
-    select
-      f.member_id,
-      f.base_cents,
-      row_number() over (order by f.remainder desc, f.member_id asc) as rnk
-    from floored f
-  ),
-  remaining as (
-    select (p_total_cents - t.allocated) as remaining_cents from totals t
   )
-  select coalesce(
-    jsonb_object_agg(
-      r.member_id,
-      r.base_cents + (case when r.rnk <= (select remaining_cents from remaining) then 1 else 0 end)
-    ),
-    '{}'::jsonb
-  )
-  from ranked r;
+  -- The zero/non-positive-weight-sum case is a real early return, not just
+  -- an all-zero pass through the remainder distribution below: with
+  -- total_weight <= 0, every base_cents is 0 and `allocated` is 0, which
+  -- would otherwise leave `remaining_cents = p_total_cents` and the ranking
+  -- step would go on to hand out 1 cent per member (up to p_total_cents
+  -- members) even though nobody has any weight -- a real divergence from
+  -- allocateProportionalCents, which returns all zeros outright in this
+  -- case. Short-circuiting here is what keeps the two implementations
+  -- agreeing exactly, not just "usually."
+  select
+    case
+      when p_total_cents = 0 or (select total_weight from sum_weights) <= 0 then
+        coalesce((select jsonb_object_agg(w.member_id, 0) from weights w), '{}'::jsonb)
+      else (
+        with floored as (
+          select
+            w.member_id,
+            floor(p_total_cents::numeric * w.weight_cents / sw.total_weight)::int as base_cents,
+            (p_total_cents::numeric * w.weight_cents / sw.total_weight)
+              - floor(p_total_cents::numeric * w.weight_cents / sw.total_weight) as remainder
+          from weights w cross join sum_weights sw
+        ),
+        totals as (
+          select coalesce(sum(base_cents), 0) as allocated from floored
+        ),
+        ranked as (
+          select
+            f.member_id,
+            f.base_cents,
+            row_number() over (order by f.remainder desc, f.member_id asc) as rnk
+          from floored f
+        )
+        select coalesce(
+          jsonb_object_agg(
+            r.member_id,
+            r.base_cents + (case when r.rnk <= (select p_total_cents - allocated from totals) then 1 else 0 end)
+          ),
+          '{}'::jsonb
+        )
+        from ranked r
+      )
+    end;
 $$;
 
 revoke all on function private.allocate_proportional_cents(int, jsonb) from public;
@@ -536,18 +558,17 @@ begin
             where id = v_inventory.id;
             v_kitchen_restored := v_kitchen_restored + 1;
           else
-            -- Increment quantity only when the purchase quantity AND the
-            -- existing row's unit are both reliably countable — otherwise a
-            -- low-effort status touch only. Never invent a number.
-            if v_inventory.unit = 'count' and v_inventory.quantity is not null then
-              update public.inventory_items
-              set quantity = v_inventory.quantity + 1, status = 'in_stock', updated_at = now()
-              where id = v_inventory.id;
-            else
-              update public.inventory_items
-              set status = 'in_stock', updated_at = now()
-              where id = v_inventory.id;
-            end if;
+            -- p_items carries no purchased-quantity field at all (ReviewItem
+            -- has no `quantity` — Checkpoint G's review UI never collects
+            -- one), so there is no reliable purchase count to add here,
+            -- regardless of whether the existing row happens to track
+            -- quantity in countable units. A low-effort status touch only —
+            -- never a guessed number. Real quantity arithmetic can be added
+            -- later, but only once a reviewed quantity is actually passed
+            -- into this RPC.
+            update public.inventory_items
+            set status = 'in_stock', updated_at = now()
+            where id = v_inventory.id;
             v_kitchen_updated := v_kitchen_updated + 1;
           end if;
         else
@@ -661,3 +682,61 @@ $$;
 
 revoke all on function public.confirm_receipt(uuid, uuid, jsonb) from public;
 grant execute on function public.confirm_receipt(uuid, uuid, jsonb) to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- delete_expense — receipt-linked correction.
+--
+-- receipt_imports.linked_expense_id -> expenses is a plain (NO ACTION) FK
+-- with no ON DELETE clause (checkpoint E's migration, unchanged here) --
+-- deleting an expense that a confirmed receipt points at would otherwise hit
+-- that FK and fail with a raw constraint-violation error, the same kind of
+-- surprise this codebase avoids everywhere else. delete_expense() already
+-- had one piece of receipt-shaped correction logic (reopening a paid bill)
+-- before this checkpoint existed; this adds the receipt case alongside it.
+--
+-- Deliberately REJECTS with a clear message rather than atomically
+-- unconfirming the receipt: unlike a bill (whose only side effect is its own
+-- status), unwinding a confirmed receipt would also mean reversing whatever
+-- happened to Kitchen (a restored Out item, an incremented quantity, a
+-- brand-new row) and to household_product_memory -- and confirm_receipt
+-- doesn't record enough "what was this row before" history to reverse those
+-- safely and generically. Rejecting is the conservative choice; a dedicated
+-- "unlink this receipt" flow that captures a proper undo trail is future
+-- scope, not smuggled in here as a side effect of a Money delete button.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.delete_expense(p_expense_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_household_id uuid;
+begin
+  select household_id into v_household_id from public.expenses where id = p_expense_id;
+  if v_household_id is null then
+    return;
+  end if;
+
+  if not exists (
+    select 1 from public.household_members
+    where household_id = v_household_id and user_id = (select auth.uid())
+  ) then
+    raise exception 'Not a member of this household.' using errcode = '42501';
+  end if;
+
+  if exists (select 1 from public.receipt_imports where linked_expense_id = p_expense_id) then
+    raise exception 'This expense was created from a scanned receipt and can''t be deleted here yet.' using errcode = 'P0004';
+  end if;
+
+  update public.bills
+  set status = 'upcoming', paid_at = null, linked_expense_id = null, updated_at = now()
+  where linked_expense_id = p_expense_id;
+
+  delete from public.expenses where id = p_expense_id; -- expense_shares cascade
+end;
+$$;
+
+revoke all on function public.delete_expense(uuid) from public;
+grant execute on function public.delete_expense(uuid) to authenticated;

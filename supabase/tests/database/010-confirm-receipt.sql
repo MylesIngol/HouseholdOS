@@ -326,8 +326,10 @@ select is(
 );
 
 -- ----------------------------------------------------------------------------
--- R6: an existing active item with a matching barcode and a reliably
--- countable quantity is incremented, not overwritten with a guess.
+-- R6: an existing active item with a matching barcode gets a status touch
+-- only -- p_items carries no purchased-quantity field, so confirm_receipt
+-- never invents one, even when the existing row happens to track quantity
+-- in countable units.
 -- ----------------------------------------------------------------------------
 
 select tests.authenticate_as('receipt_owner');
@@ -354,8 +356,8 @@ select public.confirm_receipt(
 
 select is(
   (select quantity from public.inventory_items where id = (select value::uuid from test_ctx where key = 'r6_inventory_id')),
-  4,
-  'a reliably-countable existing item has its quantity incremented, not overwritten with a guess'
+  3,
+  'quantity is left untouched -- confirm_receipt never manufactures a purchased quantity it was not given'
 );
 
 select is(
