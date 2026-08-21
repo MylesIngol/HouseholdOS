@@ -7,7 +7,7 @@ import { PillSelector } from '@/components/ui/pill-selector';
 import { Radii, Spacing } from '@/constants/theme';
 import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { isSplitReadyToSave, SplitEditor } from '@/features/money/components/split-editor';
-import { getCategoryLabel, getDeleteExpenseWarning } from '@/features/money/display';
+import { getCategoryLabel, getDeleteExpenseErrorMessage, getDeleteExpenseWarning } from '@/features/money/display';
 import { centsToDollarsInput, dollarsToCents, resolveShares } from '@/features/money/money-math';
 import { useAddExpense, useBills, useDeleteExpense, useUpdateExpense } from '@/features/money/queries';
 import type { Expense, ExpenseCategory, SplitMode } from '@/features/money/types';
@@ -52,6 +52,7 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
   const [notes, setNotes] = useState('');
   const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!visible) return;
@@ -72,6 +73,8 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
     setNotes(expense?.notes ?? '');
     setMoreOptionsOpen(false);
     setDeleteConfirmOpen(false);
+    setDeleteErrorMessage(undefined);
+    deleteExpense.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, expense?.id]);
 
@@ -114,10 +117,27 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
     onClose();
   }
 
-  function handleDelete() {
-    if (!expense) return;
-    deleteExpense.mutate(expense.id);
-    onClose();
+  // Awaits the RPC before doing anything else — the sheet only closes on a
+  // real success, never optimistically. A rejection (today, exclusively a
+  // receipt-linked expense — see delete_expense()'s override in the
+  // confirm_receipt migration) keeps the sheet open with its own
+  // human-readable message surfaced right where the user just tapped
+  // Delete, instead of silently vanishing while the expense still exists.
+  async function handleDelete() {
+    if (!expense || deleteExpense.isPending) return;
+    setDeleteErrorMessage(undefined);
+    try {
+      await deleteExpense.mutateAsync(expense.id);
+      onClose();
+    } catch (error) {
+      setDeleteErrorMessage(getDeleteExpenseErrorMessage(error));
+    }
+  }
+
+  function handleCancelDelete() {
+    setDeleteConfirmOpen(false);
+    setDeleteErrorMessage(undefined);
+    deleteExpense.reset();
   }
 
   return (
@@ -242,17 +262,25 @@ export function ExpenseSheet({ visible, onClose, expense }: ExpenseSheetProps) {
               {getDeleteExpenseWarning(expense, bills)}
             </ThemedText>
             <View style={styles.confirmActions}>
-              <Pressable onPress={() => setDeleteConfirmOpen(false)} hitSlop={8}>
+              <Pressable onPress={handleCancelDelete} hitSlop={8} disabled={deleteExpense.isPending}>
                 <ThemedText type="small" themeColor="muted">
                   Cancel
                 </ThemedText>
               </Pressable>
-              <Pressable onPress={handleDelete} hitSlop={8}>
-                <ThemedText type="linkPrimary" style={{ color: theme.danger }}>
-                  Delete
+              <Pressable onPress={handleDelete} hitSlop={8} disabled={deleteExpense.isPending}>
+                <ThemedText
+                  type="linkPrimary"
+                  style={{ color: theme.danger, opacity: deleteExpense.isPending ? 0.5 : 1 }}
+                >
+                  {deleteExpense.isPending ? 'Deleting…' : 'Delete'}
                 </ThemedText>
               </Pressable>
             </View>
+            {deleteErrorMessage && (
+              <ThemedText type="small" themeColor="danger" style={styles.deleteError}>
+                {deleteErrorMessage}
+              </ThemedText>
+            )}
           </View>
         ))}
     </FullScreenForm>
@@ -275,6 +303,9 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 72,
     textAlignVertical: 'top',
+  },
+  deleteError: {
+    marginTop: Spacing.one,
   },
   confirmActions: {
     flexDirection: 'row',

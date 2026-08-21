@@ -119,6 +119,22 @@ export function getDeleteExpenseWarning(expense: Expense, bills: Bill[]): string
   return "Deleting this expense will remove its effect from roommate balances. This can't be undone.";
 }
 
+/**
+ * Extracts a human-readable message from a failed delete_expense call. This
+ * is a thin, safe passthrough rather than message-shaping: delete_expense()
+ * (see the confirm_receipt migration's override, Milestone 7 checkpoint H)
+ * already raises a real, human-readable message for the one case a user can
+ * hit today — an expense created from a scanned receipt — and PostgrestError
+ * extends Error, so `.message` IS that raised text. Only a genuinely
+ * unexpected failure (dropped connection, an error shape this never
+ * anticipated) falls back to a generic message.
+ */
+export function getDeleteExpenseErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message
+    ? error.message
+    : "Couldn't delete that expense — try again.";
+}
+
 export type ActivityTone = 'neutral' | 'success' | 'warning';
 
 export type ActivitySummary = {
