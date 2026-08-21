@@ -6,12 +6,15 @@ import { ThemedText } from '@/components/themed-text';
 import { PrimaryButton } from '@/components/ui/primary-button';
 import { Screen } from '@/components/ui/screen';
 import { Radii, Spacing } from '@/constants/theme';
-import { useMyHousehold } from '@/features/household/queries';
+import { useHouseholdMembers, useMyHousehold } from '@/features/household/queries';
 import { BarcodeConfirmSheet } from '@/features/scan/components/barcode-confirm-sheet';
 import { BarcodeScannerSheet } from '@/features/scan/components/barcode-scanner-sheet';
 import { ReceiptCaptureSheet } from '@/features/scan/components/receipt-capture-sheet';
+import { ReceiptReviewSheet } from '@/features/scan/components/receipt-review-sheet';
 import { useProcessReceipt } from '@/features/scan/queries';
 import type { CapturedReceiptImage } from '@/features/scan/receipt-image';
+import { receiptToReviewItems, type ReviewItem } from '@/features/scan/receipt-review-session';
+import type { Receipt } from '@/features/scan/receipt-validator';
 import { useTheme } from '@/hooks/use-theme';
 
 type ActiveSheet = 'none' | 'barcode' | 'receipt';
@@ -36,25 +39,45 @@ type ActiveSheet = 'none' | 'barcode' | 'receipt';
 // without re-opening the camera; it's a ref, not state, because it's pure
 // bookkeeping for the next action, not something that should ever trigger a
 // re-render on its own.
+//
+// Checkpoint G adds `reviewSession`: the editable Receipt Review state,
+// auto-populated the moment process-receipt succeeds and opened immediately
+// (one continuous scan -> review flow, same "no intermediate summary to
+// dismiss" pattern the barcode flow already uses). It's held HERE, not
+// inside ReceiptReviewSheet's own local state, specifically so it survives
+// a tab switch away and back — this screen already stays mounted across tab
+// changes (that's what already lets receiptFlow/barcodeNote survive them
+// today), so lifting this up costs nothing extra and needs no new
+// persistence layer, per the explicit "if the existing architecture
+// supports that without unnecessary complexity" instruction.
 // -----------------------------------------------------------------------------
 
 type ReceiptFlowState =
   | { phase: 'idle' }
   | { phase: 'processing' }
-  | { phase: 'success'; merchant?: string; itemCount: number; totalCents: number; receiptImportId: string }
+  | { phase: 'success'; receipt: Receipt; receiptImportId: string }
   | { phase: 'error'; message: string };
 
 const IDLE: ReceiptFlowState = { phase: 'idle' };
 
+type ReviewSession = {
+  receipt: Receipt;
+  receiptImportId: string;
+  items: ReviewItem[];
+  payerId: string | undefined;
+};
+
 export function ScanScreen() {
   const theme = useTheme();
   const { data: household } = useMyHousehold();
+  const { data: householdMembers = [] } = useHouseholdMembers(household?.id);
   const processReceiptMutation = useProcessReceipt();
   const [activeSheet, setActiveSheet] = useState<ActiveSheet>('none');
   const [scannedBarcode, setScannedBarcode] = useState<string | undefined>(undefined);
   const [confirmSheetVisible, setConfirmSheetVisible] = useState(false);
   const [barcodeNote, setBarcodeNote] = useState<string | undefined>(undefined);
   const [receiptFlow, setReceiptFlow] = useState<ReceiptFlowState>(IDLE);
+  const [reviewSession, setReviewSession] = useState<ReviewSession | undefined>(undefined);
   const lastImageRef = useRef<CapturedReceiptImage | undefined>(undefined);
 
   function handleBarcodeScanned(barcode: string) {
@@ -87,12 +110,12 @@ export function ScanScreen() {
         // once confirmed working reliably against the live project.
         console.log('[scan] process-receipt succeeded', result.receiptImportId, result.receipt);
       }
-      setReceiptFlow({
-        phase: 'success',
-        merchant: result.receipt.merchantName,
-        itemCount: result.receipt.items.length,
-        totalCents: result.receipt.totalCents,
+      setReceiptFlow({ phase: 'success', receipt: result.receipt, receiptImportId: result.receiptImportId });
+      setReviewSession({
+        receipt: result.receipt,
         receiptImportId: result.receiptImportId,
+        items: receiptToReviewItems(result.receipt, householdMembers.map((member) => member.id)),
+        payerId: householdMembers.find((member) => member.isCurrentUser)?.id,
       });
     } catch (error) {
       if (__DEV__) console.error('[scan] process-receipt failed', error); // TEMP DIAGNOSTIC
@@ -115,6 +138,27 @@ export function ScanScreen() {
   function handleRetry() {
     if (!lastImageRef.current) return;
     void runProcessReceipt(lastImageRef.current);
+  }
+
+  // Review-session edits — every one of these is a full-replacement functional
+  // update, not a mutation of the previous items array, so there's never a
+  // stale-closure risk from two edits landing in the same tick.
+  function handleChangeReviewItem(id: string, patch: Partial<ReviewItem>) {
+    setReviewSession((session) =>
+      session
+        ? { ...session, items: session.items.map((item) => (item.id === id ? { ...item, ...patch } : item)) }
+        : session,
+    );
+  }
+
+  function handleRemoveReviewItem(id: string) {
+    setReviewSession((session) =>
+      session ? { ...session, items: session.items.filter((item) => item.id !== id) } : session,
+    );
+  }
+
+  function handleChangePayerId(id: string) {
+    setReviewSession((session) => (session ? { ...session, payerId: id } : session));
   }
 
   const isProcessingReceipt = receiptFlow.phase === 'processing';
@@ -163,12 +207,9 @@ export function ScanScreen() {
             <SymbolView name="checkmark.circle.fill" size={28} tintColor={theme.success} />
             <ThemedText type="smallBold">Receipt processed</ThemedText>
             <ThemedText type="small" themeColor="muted" style={styles.resultDetailText}>
-              {receiptFlow.merchant ? `${receiptFlow.merchant} — ` : ''}
-              {receiptFlow.itemCount} item{receiptFlow.itemCount === 1 ? '' : 's'}, $
-              {(receiptFlow.totalCents / 100).toFixed(2)} total
-            </ThemedText>
-            <ThemedText type="small" themeColor="muted" style={styles.resultDetailText}>
-              Saved for review — item confirmation isn&apos;t built yet.
+              {receiptFlow.receipt.merchantName ? `${receiptFlow.receipt.merchantName} — ` : ''}
+              {receiptFlow.receipt.items.length} item{receiptFlow.receipt.items.length === 1 ? '' : 's'}, $
+              {(receiptFlow.receipt.totalCents / 100).toFixed(2)} total
             </ThemedText>
           </View>
         )}
@@ -206,6 +247,17 @@ export function ScanScreen() {
         barcode={scannedBarcode}
         onClose={() => setConfirmSheetVisible(false)}
         onSaved={(note) => setBarcodeNote(note ?? 'Added to Kitchen.')}
+      />
+      <ReceiptReviewSheet
+        visible={!!reviewSession}
+        receipt={reviewSession?.receipt}
+        items={reviewSession?.items ?? []}
+        onChangeItem={handleChangeReviewItem}
+        onRemoveItem={handleRemoveReviewItem}
+        payerId={reviewSession?.payerId}
+        onChangePayerId={handleChangePayerId}
+        members={householdMembers}
+        onClose={() => setReviewSession(undefined)}
       />
     </Screen>
   );
