@@ -296,6 +296,7 @@ Deno.serve(async (req) => {
         purchase_date: receipt.purchaseDate ?? null,
         subtotal_cents: receipt.subtotalCents ?? null,
         tax_cents: receipt.taxCents ?? null,
+        discount_cents: receipt.discountCents ?? null,
         total_cents: receipt.totalCents,
         raw_model_response: receipt,
       })

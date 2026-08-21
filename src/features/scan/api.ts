@@ -3,7 +3,9 @@ import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@s
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/lib/database.types';
 import type { Ownership, StorageLocation } from '@/features/kitchen/types';
+import type { ParticipantShare } from '@/features/money/types';
 
+import type { ReviewItem } from './receipt-review-session';
 import type { Receipt } from './receipt-validator';
 import type { ProductMemory, ScannedProduct } from './types';
 
@@ -271,4 +273,76 @@ export async function processReceipt(
   }
 
   return { receiptImportId: data.receiptImportId, receipt: data.receipt };
+}
+
+// -----------------------------------------------------------------------------
+// confirm_receipt — checkpoint H. Deliberately sends only the reviewed
+// items/payer, never a computed share — confirm_receipt recomputes every
+// cent itself from receipt_imports' own immutable total/tax/discount plus
+// these items' prices/assignments (adjustment 1: a modified or stale client
+// cannot dictate financial shares). This is a plain RPC call, not an Edge
+// Function — same shape as every Money/Tasks write.
+// -----------------------------------------------------------------------------
+
+type ConfirmReceiptResponse = {
+  expense_id: string;
+  total_cents: number;
+  payer_household_member_id: string;
+  member_shares: { member_id: string; amount_cents: number }[];
+  kitchen_items_created: number;
+  kitchen_items_restored: number;
+  kitchen_items_updated: number;
+  already_confirmed: boolean;
+};
+
+export type ConfirmReceiptResult = {
+  expenseId: string;
+  totalCents: number;
+  payerMemberId: string;
+  memberShares: ParticipantShare[];
+  kitchenItemsAdded: number;
+  alreadyConfirmed: boolean;
+};
+
+function toConfirmItemsJson(items: ReviewItem[]) {
+  return items.map((item) => ({
+    item_id: item.id,
+    cleaned_name: item.cleanedName,
+    total_price_cents: item.totalPriceCents,
+    assigned_member_ids: item.assignedMemberIds,
+    add_to_kitchen: item.addToKitchen,
+    category: item.category ?? null,
+    barcode: item.barcode ?? null,
+  }));
+}
+
+export async function confirmReceipt(
+  receiptImportId: string,
+  payerMemberId: string,
+  items: ReviewItem[],
+): Promise<ConfirmReceiptResult> {
+  const { data, error } = await supabase.rpc('confirm_receipt', {
+    p_receipt_import_id: receiptImportId,
+    p_payer_household_member_id: payerMemberId,
+    p_items: toConfirmItemsJson(items),
+  });
+
+  if (error) {
+    if (__DEV__) console.error('[scan] confirm_receipt failed', error); // TEMP DIAGNOSTIC
+    throw new Error(error.message || 'Could not confirm that receipt.');
+  }
+
+  const result = data as unknown as ConfirmReceiptResponse;
+  return {
+    expenseId: result.expense_id,
+    totalCents: result.total_cents,
+    payerMemberId: result.payer_household_member_id,
+    memberShares: result.member_shares.map((share) => ({
+      memberId: share.member_id,
+      amountCents: share.amount_cents,
+    })),
+    kitchenItemsAdded:
+      result.kitchen_items_created + result.kitchen_items_restored + result.kitchen_items_updated,
+    alreadyConfirmed: result.already_confirmed,
+  };
 }

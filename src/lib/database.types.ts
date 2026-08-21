@@ -242,6 +242,7 @@ export type Database = {
           storage_location: string | null;
           default_ownership: string;
           default_owner_household_member_id: string | null;
+          default_add_to_kitchen: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -254,6 +255,7 @@ export type Database = {
           storage_location?: string | null;
           default_ownership?: string;
           default_owner_household_member_id?: string | null;
+          default_add_to_kitchen?: boolean;
         };
         Update: {
           product_key?: string;
@@ -263,6 +265,7 @@ export type Database = {
           storage_location?: string | null;
           default_ownership?: string;
           default_owner_household_member_id?: string | null;
+          default_add_to_kitchen?: boolean;
         };
         Relationships: [
           {
@@ -658,10 +661,12 @@ export type Database = {
           purchase_date: string | null;
           subtotal_cents: number | null;
           tax_cents: number | null;
+          discount_cents: number | null;
           total_cents: number;
           raw_model_response: Json;
           linked_expense_id: string | null;
           confirmed_at: string | null;
+          confirmed_by_household_member_id: string | null;
           created_at: string;
         };
         // No client-facing INSERT/UPDATE policy at all — written exclusively
@@ -781,6 +786,14 @@ export type Database = {
       delete_expense: {
         Args: { p_expense_id: string };
         Returns: undefined;
+      };
+      confirm_receipt: {
+        Args: {
+          p_receipt_import_id: string;
+          p_payer_household_member_id: string;
+          p_items: Json;
+        };
+        Returns: Json;
       };
       create_bill: {
         Args: {

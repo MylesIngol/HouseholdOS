@@ -250,6 +250,7 @@ export function ScanScreen() {
       />
       <ReceiptReviewSheet
         visible={!!reviewSession}
+        receiptImportId={reviewSession?.receiptImportId}
         receipt={reviewSession?.receipt}
         items={reviewSession?.items ?? []}
         onChangeItem={handleChangeReviewItem}
@@ -257,6 +258,7 @@ export function ScanScreen() {
         payerId={reviewSession?.payerId}
         onChangePayerId={handleChangePayerId}
         members={householdMembers}
+        onConfirmed={() => setReceiptFlow(IDLE)}
         onClose={() => setReviewSession(undefined)}
       />
     </Screen>

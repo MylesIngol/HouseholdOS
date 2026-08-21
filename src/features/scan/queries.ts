@@ -1,12 +1,18 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+import { kitchenKeys } from '@/features/kitchen/query-keys';
+import { moneyKeys } from '@/features/money/query-keys';
+import { useMyHousehold } from '@/features/household/queries';
 
 import {
+  confirmReceipt,
   fetchProductMemoryByBarcode,
   lookupBarcode,
   processReceipt,
   upsertProductMemory,
   type ProductMemoryInput,
 } from './api';
+import type { ReviewItem } from './receipt-review-session';
 import type { ProductMemory, ScannedProduct } from './types';
 
 // Mutations, not queries — every one of these is a one-shot action fired by
@@ -103,5 +109,36 @@ export function useProcessReceipt() {
       householdId: string;
       image: { base64: string; mimeType: string };
     }) => processReceipt(householdId, image),
+  });
+}
+
+/**
+ * Checkpoint H: the one write path from a reviewed receipt into real Money/
+ * Kitchen data. Invalidates both domains proactively on success — realtime
+ * (use-household-realtime-sync.ts) would eventually catch the same
+ * inventory_items/expenses changes since they land in tables it already
+ * watches, but that's for OTHER devices; invalidating here is what makes
+ * this device's own Kitchen/Money screens current the moment the sheet
+ * closes, without waiting on a round-trip through Realtime.
+ */
+export function useConfirmReceipt() {
+  const queryClient = useQueryClient();
+  const { data: household } = useMyHousehold();
+  const householdId = household?.id;
+
+  return useMutation({
+    mutationFn: ({
+      receiptImportId,
+      payerMemberId,
+      items,
+    }: {
+      receiptImportId: string;
+      payerMemberId: string;
+      items: ReviewItem[];
+    }) => confirmReceipt(receiptImportId, payerMemberId, items),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: kitchenKeys.items(householdId) });
+      queryClient.invalidateQueries({ queryKey: moneyKeys.expenses(householdId) });
+    },
   });
 }
