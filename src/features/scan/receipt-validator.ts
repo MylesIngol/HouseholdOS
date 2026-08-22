@@ -67,6 +67,107 @@ function isValidIsoDate(value: unknown): value is string {
   return !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
 }
 
+// Receipt-level lines the model sometimes mis-emits as ordinary items — never
+// products a shopper bought, so they must never reach a Review screen as an
+// assignable/Add-to-Kitchen-eligible item (plan section 9, "Checkout Bag Tax"
+// regression). Matched by EXACT normalized full-line equality only (never a
+// substring/contains check) specifically so a real product that happens to
+// contain a word like "bag" — "Bag of Chips", "Sandwich Bags" — is never
+// dropped; only a line whose ENTIRE text is one of these known labels is
+// treated as receipt-level rather than merchandise.
+const FEE_OR_TAX_LABELS = new Set(['TAX', 'SALES TAX', 'CHECKOUT BAG TAX', 'BAG TAX', 'BAG FEE']);
+
+const SUMMARY_OR_PAYMENT_LABELS = new Set([
+  // Running-total lines — restate a total, never a purchase.
+  'SUBTOTAL',
+  'SUB TOTAL',
+  'BALANCE',
+  'BALANCE DUE',
+  'BAL DUE',
+  'TOTAL',
+  'GRAND TOTAL',
+  'AMOUNT DUE',
+  // Payment/tender/change lines — how the total was paid, not merchandise.
+  'CASH',
+  'CASH TENDERED',
+  'CASH TENDER',
+  'CREDIT',
+  'CREDIT CARD',
+  'DEBIT',
+  'DEBIT CARD',
+  'CHANGE',
+  'CHANGE DUE',
+  'TENDER',
+  'TENDERED',
+  'VISA',
+  'MASTERCARD',
+  'AMEX',
+  'AMERICAN EXPRESS',
+  'DISCOVER',
+  'GIFT CARD',
+  'EBT',
+  'EBT CASH',
+  'EBT SNAP',
+  'PAYMENT',
+  'AUTH CODE',
+  'APPROVAL CODE',
+]);
+
+function normalizeLabel(text: string): string {
+  return text.trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:.]+$/, '');
+}
+
+/**
+ * Strips receipt-level summary/tax/fee/payment lines out of `items` in
+ * place, folding mandatory tax/fee amounts (e.g. "Checkout Bag Tax") into
+ * `taxCents` rather than dropping the money entirely — the fee was really
+ * charged, it's just not a product. Summary lines (SUBTOTAL/TOTAL/BALANCE)
+ * and payment/tender lines are simply removed: they don't represent
+ * additional money, so folding them into tax would double-count.
+ *
+ * Deliberately runs AFTER per-item structural validation and AFTER
+ * subtotal/tax/discount have been attached to `receipt`, so it can adjust
+ * `receipt.taxCents` directly. See the confirm_receipt / receipt-math.ts
+ * reconciliation this exists to keep exact: an item like "Checkout Bag Tax"
+ * left in `items` inflates the computed items-subtotal past the receipt's
+ * own `subtotalCents`, which reconciliation correctly (but symptomatically)
+ * flags as a discrepancy.
+ */
+function sanitizeReceiptChargeLines(receipt: Receipt): void {
+  const keptItems: ReceiptItem[] = [];
+  let foldedIntoTaxCents = 0;
+
+  for (const item of receipt.items) {
+    const normalizedCleaned = normalizeLabel(item.cleanedName);
+    const normalizedRaw = normalizeLabel(item.rawText);
+
+    if (FEE_OR_TAX_LABELS.has(normalizedCleaned) || FEE_OR_TAX_LABELS.has(normalizedRaw)) {
+      foldedIntoTaxCents += item.totalPriceCents;
+      receipt.warnings.push(
+        `Folded "${item.cleanedName}" (${(item.totalPriceCents / 100).toFixed(2)}) into tax — a receipt-level charge, not a product.`,
+      );
+      continue;
+    }
+
+    if (
+      SUMMARY_OR_PAYMENT_LABELS.has(normalizedCleaned) ||
+      SUMMARY_OR_PAYMENT_LABELS.has(normalizedRaw)
+    ) {
+      receipt.warnings.push(
+        `Removed "${item.cleanedName}" from the item list — a receipt summary/payment line, not a product.`,
+      );
+      continue;
+    }
+
+    keptItems.push(item);
+  }
+
+  receipt.items = keptItems;
+  if (foldedIntoTaxCents > 0) {
+    receipt.taxCents = (receipt.taxCents ?? 0) + foldedIntoTaxCents;
+  }
+}
+
 function validateItem(raw: unknown, index: number, warnings: string[]): ReceiptItem | undefined {
   if (!isPlainObject(raw)) {
     warnings.push(`Dropped item ${index + 1}: not a valid object.`);
@@ -155,6 +256,12 @@ export function validateReceipt(raw: unknown): ValidationResult {
     for (const warning of raw.warnings) {
       if (isNonEmptyString(warning)) warnings.push(warning.trim());
     }
+  }
+
+  sanitizeReceiptChargeLines(receipt);
+
+  if (receipt.items.length === 0) {
+    return { ok: false, error: 'Could not extract any usable items from this receipt.' };
   }
 
   return { ok: true, receipt };

@@ -121,6 +121,13 @@ Read every line item you can and return the requested JSON. For each item:
 - If a field can't be confidently read, return null for it rather than guessing.
 - If anything about the receipt is uncertain (blurry section, cut-off edge, ambiguous total), add a short note to "warnings".
 
+Receipt-level lines are NOT items — never put any of the following into "items", since they are not products a shopper bought:
+- Tax / mandatory-fee lines: "TAX", "SALES TAX", "CHECKOUT BAG TAX", "BAG TAX", "BAG FEE", CRV/bottle-deposit fees, or any other line whose entire purpose is a government- or store-mandated charge on the transaction. Instead, ADD every one of these amounts together into "taxCents" — if the receipt prints one combined tax figure, use that; if it prints tax and a separate mandatory fee (like a bag tax) as separate lines, sum them into a single "taxCents" value.
+- Summary / running-total lines: "SUBTOTAL", "BALANCE", "TOTAL", "GRAND TOTAL", "AMOUNT DUE", and similar — these restate a total, they never represent something purchased.
+- Payment / tender / change lines: however the customer paid (cash, credit, debit, a card brand name, "TENDERED", "CHANGE DUE", gift card, EBT, etc.) — never items either.
+Be conservative about this: a real product whose name happens to contain a word like "bag" (e.g. "Bag of Chips", "Sandwich Bags", "Trash Bags") IS a legitimate item and must stay in "items" — only exclude a line when its entire purpose is one of the receipt-level categories above, not merely because it contains a similar word.
+"subtotalCents" should be the sum of the actual merchandise items only, never including tax or fees.
+
 Privacy: NEVER extract or output any payment card number or digits (including a partial/last-4), or any loyalty/rewards account number, even if visible on the receipt. Omit them entirely — do not put them in any field, including warnings.`;
 
 Deno.serve(async (req) => {
