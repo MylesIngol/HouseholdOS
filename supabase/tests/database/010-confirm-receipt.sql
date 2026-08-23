@@ -18,7 +18,7 @@
 
 begin;
 
-select plan(23);
+select plan(39);
 
 create temporary table test_ctx (key text primary key, value text);
 
@@ -326,10 +326,15 @@ select is(
 );
 
 -- ----------------------------------------------------------------------------
--- R6: an existing active item with a matching barcode gets a status touch
--- only -- p_items carries no purchased-quantity field, so confirm_receipt
--- never invents one, even when the existing row happens to track quantity
--- in countable units.
+-- R6: an existing active item with a matching barcode and count semantics
+-- (unit = 'count') gets its quantity INCREMENTED by the purchased quantity
+-- (Milestone 7 Kitchen-quantity-aggregation refinement -- a single matching
+-- receipt line is a purchased quantity of 1, so 3 existing + 1 purchased =
+-- 4). This intentionally supersedes the pre-aggregation behavior of never
+-- touching quantity: confirm_receipt now has a real (line-count-derived)
+-- purchased quantity to work with, so "never invent a quantity" no longer
+-- applies here -- it only applies to a row whose unit isn't count-based
+-- (see the T-Agg tests below for that case, and for new/grouped rows).
 -- ----------------------------------------------------------------------------
 
 select tests.authenticate_as('receipt_owner');
@@ -356,8 +361,8 @@ select public.confirm_receipt(
 
 select is(
   (select quantity from public.inventory_items where id = (select value::uuid from test_ctx where key = 'r6_inventory_id')),
-  3,
-  'quantity is left untouched -- confirm_receipt never manufactures a purchased quantity it was not given'
+  4,
+  'a matching receipt line increments an existing count-semantics item''s quantity by the purchased quantity (3 + 1 = 4)'
 );
 
 select is(
@@ -419,6 +424,218 @@ select is(
   (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Kombucha Six Pack Not Added'),
   0::bigint,
   'Add to Kitchen = false never creates an inventory row, even though the item still confirms'
+);
+
+-- ----------------------------------------------------------------------------
+-- T-Agg-1: two no-barcode lines for the same product (different prices,
+-- different assignees -- the exact "Beef Top Blade $13.24 / $17.24" case
+-- reported) collapse into ONE Kitchen row with quantity 2, while the Money
+-- split still treats each line completely independently: item 1 ($13.24)
+-- assigned to owner only, item 2 ($17.24) split owner+member2. If Kitchen
+-- aggregation ever leaked into the financial math, these numbers would come
+-- out wrong.
+-- ----------------------------------------------------------------------------
+
+select tests.authenticate_as_service_role();
+insert into public.receipt_imports (id, household_id, uploaded_by_household_member_id, total_cents, raw_model_response)
+values ('00000000-0000-0000-0000-000000000009', (select value::uuid from test_ctx where key = 'household_a_id'), (select value::uuid from test_ctx where key = 'owner_member_id'), 3048, '{}'::jsonb);
+
+select tests.authenticate_as('receipt_owner');
+insert into test_ctx (key, value)
+select 'tagg1_result', public.confirm_receipt(
+  '00000000-0000-0000-0000-000000000009'::uuid,
+  (select value::uuid from test_ctx where key = 'owner_member_id'),
+  jsonb_build_array(
+    jsonb_build_object(
+      'item_id', 'a', 'cleaned_name', 'Beef Top Blade', 'total_price_cents', 1324,
+      'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')),
+      'add_to_kitchen', true, 'category', 'meat'
+    ),
+    jsonb_build_object(
+      'item_id', 'b', 'cleaned_name', 'Beef Top Blade', 'total_price_cents', 1724,
+      'assigned_member_ids', jsonb_build_array(
+        (select value from test_ctx where key = 'owner_member_id'),
+        (select value from test_ctx where key = 'member2_id')
+      ),
+      'add_to_kitchen', true, 'category', 'meat'
+    )
+  )
+)::text;
+
+select is(
+  (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Blade'),
+  1::bigint,
+  'two no-barcode lines for the same product create exactly one Kitchen row'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Blade'),
+  2,
+  'the grouped row''s quantity equals the number of matching receipt lines'
+);
+
+select is(
+  (select unit from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Blade'),
+  'count',
+  'a newly created grouped row uses count semantics'
+);
+
+select is(
+  (select status from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Blade'),
+  'in_stock',
+  'a newly created grouped row is in stock'
+);
+
+select is(
+  (select amount_cents from public.expense_shares
+   where expense_id = ((select value::jsonb ->> 'expense_id' from test_ctx where key = 'tagg1_result'))::uuid
+     and household_member_id = (select value::uuid from test_ctx where key = 'owner_member_id')),
+  2186,
+  'owner''s share still reflects each line''s own independent split (1324 + 862), unaffected by Kitchen aggregation'
+);
+
+select is(
+  (select amount_cents from public.expense_shares
+   where expense_id = ((select value::jsonb ->> 'expense_id' from test_ctx where key = 'tagg1_result'))::uuid
+     and household_member_id = (select value::uuid from test_ctx where key = 'member2_id')),
+  862,
+  'member2''s share reflects only their assignment on the second line (862), unaffected by Kitchen aggregation'
+);
+
+-- ----------------------------------------------------------------------------
+-- T-Agg-2: three identical no-barcode lines -> quantity 3.
+-- ----------------------------------------------------------------------------
+
+select tests.authenticate_as_service_role();
+insert into public.receipt_imports (id, household_id, uploaded_by_household_member_id, total_cents, raw_model_response)
+values ('00000000-0000-0000-0000-000000000010', (select value::uuid from test_ctx where key = 'household_a_id'), (select value::uuid from test_ctx where key = 'owner_member_id'), 300, '{}'::jsonb);
+
+select tests.authenticate_as('receipt_owner');
+select public.confirm_receipt(
+  '00000000-0000-0000-0000-000000000010'::uuid,
+  (select value::uuid from test_ctx where key = 'owner_member_id'),
+  jsonb_build_array(
+    jsonb_build_object('item_id', 'a', 'cleaned_name', 'Canned Beans', 'total_price_cents', 100, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'canned'),
+    jsonb_build_object('item_id', 'b', 'cleaned_name', 'Canned Beans', 'total_price_cents', 100, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'canned'),
+    jsonb_build_object('item_id', 'c', 'cleaned_name', 'Canned Beans', 'total_price_cents', 100, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'canned')
+  )
+);
+
+select is(
+  (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Canned Beans'),
+  1::bigint,
+  'three no-barcode lines for the same product still create exactly one Kitchen row'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Canned Beans'),
+  3,
+  'the grouped row''s quantity scales with three matching lines'
+);
+
+-- ----------------------------------------------------------------------------
+-- T-Agg-3: the same barcode twice (no pre-existing row) -> one NEW Kitchen
+-- row, quantity 2.
+-- ----------------------------------------------------------------------------
+
+select tests.authenticate_as_service_role();
+insert into public.receipt_imports (id, household_id, uploaded_by_household_member_id, total_cents, raw_model_response)
+values ('00000000-0000-0000-0000-000000000011', (select value::uuid from test_ctx where key = 'household_a_id'), (select value::uuid from test_ctx where key = 'owner_member_id'), 300, '{}'::jsonb);
+
+select tests.authenticate_as('receipt_owner');
+select public.confirm_receipt(
+  '00000000-0000-0000-0000-000000000011'::uuid,
+  (select value::uuid from test_ctx where key = 'owner_member_id'),
+  jsonb_build_array(
+    jsonb_build_object('item_id', 'a', 'cleaned_name', 'Sparkling Water', 'total_price_cents', 150, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'beverages', 'barcode', '00055'),
+    jsonb_build_object('item_id', 'b', 'cleaned_name', 'Sparkling Water', 'total_price_cents', 150, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'beverages', 'barcode', '00055')
+  )
+);
+
+select is(
+  (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and barcode = '00055'),
+  1::bigint,
+  'the same barcode appearing twice on one receipt creates exactly one new Kitchen row'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and barcode = '00055'),
+  2,
+  'the new row''s quantity equals the number of matching barcode lines'
+);
+
+select is(
+  (select unit from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and barcode = '00055'),
+  'count',
+  'a newly created barcode-grouped row uses count semantics'
+);
+
+-- ----------------------------------------------------------------------------
+-- T-Agg-4: similar but different product names on the same receipt do NOT
+-- merge -- each gets its own row, quantity 1.
+-- ----------------------------------------------------------------------------
+
+select tests.authenticate_as_service_role();
+insert into public.receipt_imports (id, household_id, uploaded_by_household_member_id, total_cents, raw_model_response)
+values ('00000000-0000-0000-0000-000000000012', (select value::uuid from test_ctx where key = 'household_a_id'), (select value::uuid from test_ctx where key = 'owner_member_id'), 2000, '{}'::jsonb);
+
+select tests.authenticate_as('receipt_owner');
+select public.confirm_receipt(
+  '00000000-0000-0000-0000-000000000012'::uuid,
+  (select value::uuid from test_ctx where key = 'owner_member_id'),
+  jsonb_build_array(
+    jsonb_build_object('item_id', 'a', 'cleaned_name', 'Beef Top Sirloin', 'total_price_cents', 1000, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'meat'),
+    jsonb_build_object('item_id', 'b', 'cleaned_name', 'Beef Top Round', 'total_price_cents', 1000, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'meat')
+  )
+);
+
+select is(
+  (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name in ('Beef Top Sirloin', 'Beef Top Round')),
+  2::bigint,
+  'similar but different product names create two separate Kitchen rows, not one merged row'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Sirloin'),
+  1,
+  'the Sirloin row is not inflated by the unrelated Round line'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Beef Top Round'),
+  1,
+  'the Round row is not inflated by the unrelated Sirloin line'
+);
+
+-- ----------------------------------------------------------------------------
+-- T-Agg-5: an Add to Kitchen = false line for the same product does not
+-- count toward the grouped quantity -- only the true line is counted.
+-- ----------------------------------------------------------------------------
+
+select tests.authenticate_as_service_role();
+insert into public.receipt_imports (id, household_id, uploaded_by_household_member_id, total_cents, raw_model_response)
+values ('00000000-0000-0000-0000-000000000013', (select value::uuid from test_ctx where key = 'household_a_id'), (select value::uuid from test_ctx where key = 'owner_member_id'), 1000, '{}'::jsonb);
+
+select tests.authenticate_as('receipt_owner');
+select public.confirm_receipt(
+  '00000000-0000-0000-0000-000000000013'::uuid,
+  (select value::uuid from test_ctx where key = 'owner_member_id'),
+  jsonb_build_array(
+    jsonb_build_object('item_id', 'a', 'cleaned_name', 'Ground Turkey', 'total_price_cents', 500, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', true, 'category', 'meat'),
+    jsonb_build_object('item_id', 'b', 'cleaned_name', 'Ground Turkey', 'total_price_cents', 500, 'assigned_member_ids', jsonb_build_array((select value from test_ctx where key = 'owner_member_id')), 'add_to_kitchen', false, 'category', 'meat')
+  )
+);
+
+select is(
+  (select count(*) from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Ground Turkey'),
+  1::bigint,
+  'only the Add to Kitchen = true line produces a Kitchen row'
+);
+
+select is(
+  (select quantity from public.inventory_items where household_id = (select value::uuid from test_ctx where key = 'household_a_id') and name = 'Ground Turkey'),
+  1,
+  'the Add to Kitchen = false line does not count toward the grouped quantity'
 );
 
 select * from finish();
