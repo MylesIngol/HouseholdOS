@@ -1,56 +1,60 @@
-# Welcome to your Expo app 👋
+# HouseholdOS
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile app for managing a shared home: groceries, pantry inventory, chores, and expenses in one place.
 
-## Get started
+Built for roommates, couples, and families using **React Native, Expo, TypeScript, and Supabase**. This repository contains an ongoing personal project, not a released production app.
 
-1. Install dependencies
+## What is in the project?
 
-   ```bash
-   npm install
-   ```
+- **Kitchen:** household food inventory and grocery management.
+- **Tasks:** shared chores, recurring schedules, rotation, and completion history.
+- **Money:** shared bills, expenses, and household balances.
+- **Scanning:** barcode lookup and receipt import with a review step.
+- **Household sync:** Supabase-backed data and realtime updates.
 
-2. Start the app
+These areas have implementation code in the repository. End-to-end behavior depends on backend configuration and device testing.
 
-   ```bash
-   npx expo start
-   ```
+## Technical overview
 
-In the output, you'll find options to open the app in a
+| Area | Technology |
+| --- | --- |
+| Mobile UI and navigation | React Native, Expo SDK 54, Expo Router |
+| Language | TypeScript |
+| Server state and caching | TanStack Query |
+| Client state | Zustand |
+| Database and backend | Supabase, SQL migrations, Edge Functions |
+| Animation | React Native Reanimated |
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Where to start reading
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+| Location | Purpose |
+| --- | --- |
+| [src/features](src/features) | Feature modules for kitchen, tasks, money, and scanning |
+| [src/lib](src/lib) | Supabase client, database types, and query configuration |
+| [src/hooks/use-household-realtime-sync.ts](src/hooks/use-household-realtime-sync.ts) | Realtime household synchronization |
+| [supabase/migrations](supabase/migrations) | Database schema and server-side operations |
+| [supabase/functions](supabase/functions) | Barcode lookup and receipt-processing endpoints |
+| [supabase/tests/database](supabase/tests/database) | Database tests |
+| [docs/development](docs/development) | Detailed milestone reports and plans |
 
-## Get a fresh project
+## Run locally
 
-When you're ready, run:
+1. Install dependencies: `npm ci`.
+2. Copy [.env.example](.env.example) to `.env` and fill in your Supabase URL and publishable key.
+3. Configure a Supabase project with the migrations in `supabase/migrations`. Scanning also requires the corresponding Edge Functions and their service configuration.
+4. Run `npm start` and select a supported Expo development environment.
+
+Only client-safe values belong in `EXPO_PUBLIC_*` variables. Keep server credentials outside the mobile app.
+
+## Checks
 
 ```bash
-npm run reset-project
+npm run lint
+npm test
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The test scripts cover money, task, and receipt-processing logic. Database tests live separately under `supabase/tests/database`.
 
-### Other setup steps
+## Project status
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Active development. The milestone documents record implementation details and future work; they are not a claim that every planned feature is complete.
